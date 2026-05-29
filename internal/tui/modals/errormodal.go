@@ -10,7 +10,10 @@ import (
 )
 
 // ErrorModel is a Bubble Tea model that displays an error and a hint in a
-// bordered box. Pressing esc, enter, or q quits the program.
+// bordered box. It is rendered as an overlay by the dashboard, which owns its
+// lifecycle: the dashboard intercepts esc/enter/q to dismiss the overlay, so
+// this model never drives dismissal or quitting itself. Update only absorbs a
+// window-size hint for layout; it is otherwise inert.
 type ErrorModel struct {
 	err   error
 	hint  string
@@ -23,13 +26,8 @@ func NewError(err error, hint string) ErrorModel { return ErrorModel{err: err, h
 func (m ErrorModel) Init() tea.Cmd { return nil }
 
 func (m ErrorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-	case tea.KeyMsg:
-		if k := msg.String(); k == "esc" || k == "enter" || k == "q" {
-			return m, tea.Quit
-		}
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = ws.Width
 	}
 	return m, nil
 }
