@@ -1,0 +1,35 @@
+# Build artifacts
+/bin/
+/dist/
+*.tar.gz
+*.zip
+*.sha256
+
+# Test artifacts
+coverage.out
+coverage.html
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local-only secrets and dumps
+*.local.sh
+.env
+.env.local
+/dumps/
+
+# Logs
+*.log
+
+# Superpowers brainstorming session artifacts
+.superpowers/
+
+# Internal planning artifacts (specs, phase plans, brainstorming sessions)
+docs/superpowers/
