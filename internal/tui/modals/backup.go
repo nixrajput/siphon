@@ -1,41 +1,34 @@
-// Package modals holds short-lived Bubble Tea models presented over the
-// dashboard. Each modal exits by sending a result message and quitting
-// its own program loop; the dashboard listens for the result and resumes.
+// Package modals holds short-lived Bubble Tea forms presented over the
+// dashboard. Each form binds its inputs into a result struct that the
+// dashboard reads once the form reaches huh.StateCompleted.
 package modals
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 
 	"github.com/nixrajput/siphon/internal/app"
 )
 
-// BackupResult is sent by the backup modal when the user submits or cancels.
+// BackupResult holds the values bound by the backup form. The dashboard
+// reads it after the form completes.
 type BackupResult struct {
 	Profile string
-	Cancel  bool
 }
 
-// NewBackup builds a Huh form that lets the user pick a backup profile.
-// onDone is a placeholder hook consumed by Task 8 (dashboard wiring).
-// The returned cmd is a scaffold stub; Task 8 replaces it with real dispatch.
-func NewBackup(d app.Deps, defaultProfile string, onDone func(BackupResult) tea.Cmd) (*huh.Form, tea.Cmd) {
-	var profile = defaultProfile
+// NewBackup builds a Huh form that lets the user pick a backup profile. The
+// returned form binds its selection into the returned *BackupResult, which
+// the dashboard reads once the form reaches huh.StateCompleted.
+func NewBackup(d app.Deps, defaultProfile string) (*huh.Form, *BackupResult) {
+	res := &BackupResult{Profile: defaultProfile}
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Profile").
 				Options(profileOptions(d)...).
-				Value(&profile),
+				Value(&res.Profile),
 		),
 	)
-	cmd := func() tea.Msg {
-		// Scaffold stub: Task 8 replaces this with app.Backup dispatch.
-		// onDone and profile are captured here so they are wired at that point.
-		_ = onDone(BackupResult{Profile: profile})
-		return nil
-	}
-	return form, cmd
+	return form, res
 }
 
 func profileOptions(d app.Deps) []huh.Option[string] {
