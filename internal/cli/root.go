@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -68,8 +69,11 @@ func buildDeps() (app.Deps, error) {
 
 	dumpDir := cfg.Defaults.DumpDir
 	if dumpDir == "" {
-		home, _ := os.UserHomeDir()
-		dumpDir = fmt.Sprintf("%s/.local/share/siphon/dumps", home)
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return app.Deps{}, fmt.Errorf("resolve home dir for default dump_dir: %w", homeErr)
+		}
+		dumpDir = filepath.Join(home, ".local", "share", "siphon", "dumps")
 	}
 	cat, err := dumps.NewCatalog(dumpDir)
 	if err != nil {

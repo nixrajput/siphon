@@ -16,10 +16,10 @@ type SyncOpts struct {
 	Tables []string
 }
 
-// Sync backs up From and restores into To. If Stream==true and both
-// drivers report NativeStream, the data flows through an in-memory pipe
-// (no temp file). Otherwise it falls back to Backup-then-Restore via
-// the catalog (Phase B implementation).
+// Sync backs up From and restores into To. In Phase B the data always flows
+// through an in-memory io.Pipe (no temp file, no catalog entry). The opt.Stream
+// flag and Capabilities().NativeStream gating — and a catalog fallback for
+// drivers that can't stream — are planned for Phase F; today Stream is unused.
 func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, string, error) {
 	src, err := d.Profiles.Resolve(opt.From)
 	if err != nil {
@@ -57,8 +57,13 @@ func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, stri
 			errCh := make(chan error, 1)
 
 			go func() {
-				errCh <- srcConn.Backup(ctx, driver.BackupOpts{IncludeTables: opt.Tables}, pw)
-				_ = pw.Close()
+				bErr := srcConn.Backup(ctx, driver.BackupOpts{IncludeTables: opt.Tables}, pw)
+				// CloseWithError propagates a backup failure to the reader as a
+				// read error instead of a clean io.EOF. Without this, a truncated
+				// dump looks complete to Restore — which, with Clean:true, has
+				// already dropped the target and would commit partial data.
+				_ = pw.CloseWithError(bErr)
+				errCh <- bErr
 			}()
 
 			restoreErr := dstConn.Restore(ctx, driver.RestoreOpts{TargetTables: opt.Tables, Clean: true}, pr)

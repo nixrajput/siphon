@@ -27,8 +27,14 @@ func startPostgres(t *testing.T) (driver.Profile, func()) {
 		t.Fatalf("start postgres container: %v", err)
 	}
 
-	host, _ := c.Host(ctx)
-	port, _ := c.MappedPort(ctx, "5432/tcp")
+	host, err := c.Host(ctx)
+	if err != nil {
+		t.Fatalf("container host: %v", err)
+	}
+	port, err := c.MappedPort(ctx, "5432/tcp")
+	if err != nil {
+		t.Fatalf("container mapped port: %v", err)
+	}
 
 	return driver.Profile{
 			Driver:   "postgres",

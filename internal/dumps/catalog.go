@@ -24,11 +24,25 @@ func NewCatalog(root string) (*Catalog, error) {
 	return &Catalog{root: root}, nil
 }
 
-// Path returns the dump file path for the given ID.
-func (c *Catalog) Path(id string) string { return filepath.Join(c.root, id+".dump") }
+// validID rejects IDs that could escape the catalog root when joined into a
+// path. Dump IDs are ULIDs, but restore/inspect/verify take the ID from user
+// input, so a crafted value like "../../etc/passwd" must not traverse out.
+func validID(id string) error {
+	if id == "" || id == "." || id == ".." ||
+		strings.ContainsAny(id, `/\`) || strings.Contains(id, "..") {
+		return &errs.Error{Op: "dumps.id", Code: errs.CodeUser, Cause: errors.New("invalid dump id: " + id), Hint: "dump ids contain no path separators"}
+	}
+	return nil
+}
+
+// Path returns the dump file path for the given ID. filepath.Base defensively
+// strips any path components so a stray separator can never escape root.
+func (c *Catalog) Path(id string) string { return filepath.Join(c.root, filepath.Base(id)+".dump") }
 
 // MetaPath returns the sidecar JSON path for the given ID.
-func (c *Catalog) MetaPath(id string) string { return filepath.Join(c.root, id+".meta.json") }
+func (c *Catalog) MetaPath(id string) string {
+	return filepath.Join(c.root, filepath.Base(id)+".meta.json")
+}
 
 // Root returns the catalog's root directory.
 func (c *Catalog) Root() string { return c.root }
@@ -44,6 +58,9 @@ func (c *Catalog) WriteMeta(m *Meta) error {
 
 // ReadMeta loads <id>.meta.json from disk.
 func (c *Catalog) ReadMeta(id string) (*Meta, error) {
+	if err := validID(id); err != nil {
+		return nil, err
+	}
 	body, err := os.ReadFile(c.MetaPath(id))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, &errs.Error{Op: "dumps.read_meta", Code: errs.CodeUser, Cause: errs.ErrDumpCorrupt, Hint: "no metadata for " + id}
@@ -80,6 +97,9 @@ func (c *Catalog) List() ([]Meta, error) {
 
 // Delete removes both the dump file and its sidecar.
 func (c *Catalog) Delete(id string) error {
+	if err := validID(id); err != nil {
+		return err
+	}
 	_ = os.Remove(c.Path(id))
 	return os.Remove(c.MetaPath(id))
 }

@@ -71,7 +71,10 @@ func dumpsPruneCmd() *cobra.Command {
 			}
 			for _, m := range rep.Would {
 				if apply {
-					_ = deps.Dumps.Delete(m.ID)
+					if delErr := deps.Dumps.Delete(m.ID); delErr != nil {
+						_, _ = fmt.Fprintf(c.OutOrStdout(), "  ! failed to delete %s: %v\n", m.ID, delErr)
+						continue
+					}
 					_, _ = fmt.Fprintf(c.OutOrStdout(), "  ✗ deleted %s\n", m.ID)
 				} else {
 					_, _ = fmt.Fprintf(c.OutOrStdout(), "  would delete %s\n", m.ID)

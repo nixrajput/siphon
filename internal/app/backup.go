@@ -127,6 +127,9 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 				DumpFormat: "custom",
 			}
 			if writeErr := d.Dumps.WriteMeta(meta); writeErr != nil {
+				// The catalog enumerates by sidecar metadata, so a dump without
+				// its meta would be an invisible orphan that never gets pruned.
+				_ = os.Remove(finalPath)
 				return writeErr
 			}
 

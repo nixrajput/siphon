@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -77,7 +78,7 @@ func profileRmCmd() *cobra.Command {
 
 func profileShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use: "show <name>", Short: "Show a profile (with secret refs)", Args: cobra.ExactArgs(1),
+		Use: "show <name>", Short: "Show a profile (secret refs shown; literal passwords masked)", Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			deps, err := buildDeps()
 			if err != nil {
@@ -88,8 +89,23 @@ func profileShowCmd() *cobra.Command {
 				return err
 			}
 			_, _ = fmt.Fprintf(c.OutOrStdout(), "driver:   %s\nhost:     %s\nport:     %d\nuser:     %s\ndatabase: %s\nsslmode:  %s\npassword: %s\n",
-				p.Driver, p.Host, p.Port, p.User, p.Database, p.SSLMode, p.Password)
+				p.Driver, p.Host, p.Port, p.User, p.Database, p.SSLMode, maskSecret(p.Password))
 			return nil
 		},
 	}
+}
+
+// maskSecret returns ref-style secrets (e.g. "env:VAR") verbatim — they are
+// pointers, not the secret itself — but masks literal passwords so `show`
+// never leaks a cleartext credential to stdout / shell scrollback.
+func maskSecret(v string) string {
+	if v == "" {
+		return ""
+	}
+	for _, scheme := range []string{"env:", "keychain:", "vault:"} {
+		if strings.HasPrefix(v, scheme) {
+			return v
+		}
+	}
+	return "••••••••"
 }

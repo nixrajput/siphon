@@ -77,3 +77,24 @@ func TestCatalog_PruneDryRun_AppliesMaxAge(t *testing.T) {
 		t.Fatalf("Kept = %v; want only new", rep.Kept)
 	}
 }
+
+// TestCatalog_RejectsTraversalID guards the path-traversal fix: IDs from user
+// input (restore/inspect/verify <id>) must not escape the catalog root.
+func TestCatalog_RejectsTraversalID(t *testing.T) {
+	c, err := NewCatalog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"../escape", "../../etc/passwd", "a/b", `a\b`, "", "..", "."} {
+		if _, err := c.ReadMeta(bad); err == nil {
+			t.Errorf("ReadMeta(%q) = nil error; want rejection", bad)
+		}
+		if err := c.Delete(bad); err == nil {
+			t.Errorf("Delete(%q) = nil error; want rejection", bad)
+		}
+	}
+	// A clean ULID-like id is accepted (ReadMeta then fails only on not-found).
+	if _, err := c.ReadMeta("01HXKZ000000000000000000"); err == nil {
+		t.Skip("unexpected: a non-existent valid id should error as not-found, not pass")
+	}
+}

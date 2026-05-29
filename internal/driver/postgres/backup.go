@@ -19,18 +19,15 @@ func (c *Conn) Backup(ctx context.Context, opt driver.BackupOpts, w io.Writer) e
 	cmd := exec.CommandContext(ctx, "pg_dump", args...)
 	cmd.Env = append(os.Environ(), "PGPASSWORD="+c.p.Password)
 	cmd.Stdout = w
+	// Discard stderr directly. Using StderrPipe + a drain goroutine would race
+	// with cmd.Wait() (Wait closes the pipe once the process exits, which the
+	// os/exec docs warn must not happen before reads complete). Phase F will
+	// wire stderr through progress.go's parser; until then, discarding is safe.
+	cmd.Stderr = io.Discard
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
 	if err := cmd.Start(); err != nil {
 		return toolMissingOrSystemErr("postgres.backup", err)
 	}
-
-	// Drain stderr (parsed into progress events later — see progress.go).
-	go func() { _, _ = io.Copy(io.Discard, stderr) }()
-
 	if err := cmd.Wait(); err != nil {
 		return &errs.Error{Op: "postgres.backup", Code: errs.CodeSystem, Cause: err}
 	}

@@ -28,7 +28,7 @@ func (Driver) Capabilities() driver.Capabilities {
 		PerTable:           true,
 		SchemaOnly:         true,
 		DataOnly:           true,
-		Parallel:           true, // pg_restore supports -j; pg_dump parallelism needs -Fd (see backup.go), so backups are single-stream in Phase B
+		Parallel:           true, // capability exists in the engine, but not wired in Phase B: pg_dump -j needs -Fd (see backup.go) and RestoreOpts carries no Parallel field yet — both land in a later phase
 		Compression:        true,
 		BinaryFormat:       true,
 		CrossEngineSource:  false, // Phase F
@@ -59,22 +59,32 @@ func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error
 func buildDSN(p driver.Profile) string {
 	parts := make([]string, 0, 6)
 	if p.Host != "" {
-		parts = append(parts, "host="+p.Host)
+		parts = append(parts, kv("host", p.Host))
 	}
 	if p.Port != 0 {
-		parts = append(parts, "port="+strconv.Itoa(p.Port))
+		parts = append(parts, kv("port", strconv.Itoa(p.Port)))
 	}
 	if p.User != "" {
-		parts = append(parts, "user="+p.User)
+		parts = append(parts, kv("user", p.User))
 	}
 	if p.Password != "" {
-		parts = append(parts, "password="+p.Password)
+		parts = append(parts, kv("password", p.Password))
 	}
 	if p.Database != "" {
-		parts = append(parts, "dbname="+p.Database)
+		parts = append(parts, kv("dbname", p.Database))
 	}
-	parts = append(parts, "sslmode="+defaultSSL(p.SSLMode))
+	parts = append(parts, kv("sslmode", defaultSSL(p.SSLMode)))
 	return strings.Join(parts, " ")
+}
+
+// kv formats one libpq keyword DSN pair. Values containing spaces, quotes, or
+// backslashes must be single-quoted with ' and \ escaped (per libpq rules),
+// otherwise a value like "p@ss word" would be split across tokens and misparse.
+func kv(key, val string) string {
+	if strings.ContainsAny(val, " '\\") {
+		val = "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(val) + "'"
+	}
+	return key + "=" + val
 }
 
 func defaultSSL(s string) string {
