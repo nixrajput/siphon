@@ -42,6 +42,15 @@ func (r *Resolver) Resolve(ref string) (string, error) {
 			return b.Resolve(ref)
 		}
 	}
+	// No backend claims this scheme. Fall back to the passthrough ("") backend
+	// rather than erroring: a literal value can legitimately contain a colon
+	// before any "/" or space (e.g. a Postgres password "p@ss:w0rd"), which
+	// parseScheme would otherwise read as the unknown scheme "p@ss".
+	for _, b := range r.backends {
+		if b.Scheme() == "" {
+			return b.Resolve(ref)
+		}
+	}
 	return "", &errs.Error{
 		Op:    "secrets.resolve",
 		Code:  errs.CodeUser,
