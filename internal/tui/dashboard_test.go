@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,6 +17,7 @@ import (
 	"github.com/nixrajput/siphon/internal/jobs"
 	"github.com/nixrajput/siphon/internal/profile"
 	"github.com/nixrajput/siphon/internal/secrets"
+	"github.com/nixrajput/siphon/internal/tui/modals"
 	"github.com/nixrajput/siphon/internal/tui/panels"
 )
 
@@ -108,6 +110,41 @@ func TestProfiles_FilteringDisabled(t *testing.T) {
 	if p.FilteringEnabled() {
 		t.Fatal("profiles list filtering is enabled; expected it disabled (FIX B)")
 	}
+}
+
+// TestNewRestore_AdaptiveDumpIDField verifies that NewRestore builds without
+// panic for both an empty catalog and a seeded catalog.
+func TestNewRestore_AdaptiveDumpIDField(t *testing.T) {
+	t.Run("empty catalog builds form", func(t *testing.T) {
+		d := testDeps(t)
+		form, res := modals.NewRestore(d, "", "")
+		if form == nil {
+			t.Fatal("NewRestore returned nil form for empty catalog")
+		}
+		if res == nil {
+			t.Fatal("NewRestore returned nil result for empty catalog")
+		}
+	})
+
+	t.Run("seeded catalog builds form", func(t *testing.T) {
+		d := testDeps(t)
+		meta := &dumps.Meta{
+			ID:      "01JABCDEFGHJKMNPQRSTVWXYZ0",
+			Profile: "default",
+			Driver:  "postgres",
+			Created: time.Now(),
+		}
+		if err := d.Dumps.WriteMeta(meta); err != nil {
+			t.Fatalf("WriteMeta: %v", err)
+		}
+		form, res := modals.NewRestore(d, "", "")
+		if form == nil {
+			t.Fatal("NewRestore returned nil form for seeded catalog")
+		}
+		if res == nil {
+			t.Fatal("NewRestore returned nil result for seeded catalog")
+		}
+	})
 }
 
 // TestDashboard_EscCancelsForm verifies that pressing Escape while a backup or

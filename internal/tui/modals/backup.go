@@ -27,7 +27,7 @@ func NewBackup(d app.Deps, defaultProfile string) (*huh.Form, *BackupResult) {
 				Options(profileOptions(d)...).
 				Value(&res.Profile),
 		),
-	)
+	).WithShowHelp(false)
 	return form, res
 }
 

@@ -17,12 +17,34 @@ type RestoreResult struct {
 // NewRestore builds a Huh form for selecting a restore target. The returned
 // form binds its inputs into the returned *RestoreResult, which the dashboard
 // reads once the form reaches huh.StateCompleted.
+//
+// The dump-ID step is adaptive: if the catalog contains dumps, a Select field
+// is shown; otherwise an Input field is shown (with a title that signals no
+// saved dumps exist).
 func NewRestore(d app.Deps, defaultProfile, defaultDump string) (*huh.Form, *RestoreResult) {
 	res := &RestoreResult{Profile: defaultProfile, DumpID: defaultDump}
+
+	var dumpIDField huh.Field
+	metas, err := d.Dumps.List()
+	if err == nil && len(metas) > 0 {
+		opts := make([]huh.Option[string], len(metas))
+		for i, m := range metas {
+			opts[i] = huh.NewOption(m.ID, m.ID)
+		}
+		dumpIDField = huh.NewSelect[string]().
+			Title("Dump ID").
+			Options(opts...).
+			Value(&res.DumpID)
+	} else {
+		dumpIDField = huh.NewInput().
+			Title("Dump ID (type — no saved dumps)").
+			Value(&res.DumpID)
+	}
+
 	form := huh.NewForm(
 		huh.NewGroup(huh.NewSelect[string]().Title("Target profile").Options(profileOptions(d)...).Value(&res.Profile)),
-		huh.NewGroup(huh.NewInput().Title("Dump ID").Value(&res.DumpID)),
+		huh.NewGroup(dumpIDField),
 		huh.NewGroup(huh.NewConfirm().Title("Clean target before restore?").Affirmative("Yes").Negative("No").Value(&res.Clean)),
-	)
+	).WithShowHelp(false)
 	return form, res
 }
