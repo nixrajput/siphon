@@ -1,41 +1,209 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
+	"github.com/nixrajput/siphon/internal/app"
+	"github.com/nixrajput/siphon/internal/config"
+	"github.com/nixrajput/siphon/internal/dumps"
+	"github.com/nixrajput/siphon/internal/errs"
+	"github.com/nixrajput/siphon/internal/jobs"
+	"github.com/nixrajput/siphon/internal/profile"
+	"github.com/nixrajput/siphon/internal/secrets"
+	"github.com/nixrajput/siphon/internal/tui/modals"
+	"github.com/nixrajput/siphon/internal/tui/panels"
 )
 
-func TestModel_View_ContainsTitleAndQuitHint(t *testing.T) {
-	m := New()
-	view := m.View()
-	if !strings.Contains(view, "siphon") {
-		t.Fatalf("View() = %q; want it to contain 'siphon'", view)
+func testDeps(t *testing.T) app.Deps {
+	t.Helper()
+	cfg := &config.Config{}
+	res := secrets.NewResolver(secrets.Passthrough{})
+	ps := profile.New(cfg, res, func(*config.Config) error { return nil })
+	cat, err := dumps.NewCatalog(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewCatalog: %v", err)
 	}
-	if !strings.Contains(view, "quit") {
-		t.Fatalf("View() = %q; want it to contain quit hint", view)
+	return app.Deps{Profiles: ps, Dumps: cat, Drivers: app.DefaultDrivers()}
+}
+
+func TestDashboard_View_ContainsPanelsAndQuitHint(t *testing.T) {
+	d := NewDashboard(testDeps(t))
+	out, _ := d.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	view := out.(Dashboard).View()
+	for _, want := range []string{"Profiles", "Dumps", "Jobs", "quit"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("View() missing %q; got:\n%s", want, view)
+		}
 	}
 }
 
-func TestModel_Update_QQuits(t *testing.T) {
-	m := New()
-	out, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+func TestDashboard_Update_QQuits(t *testing.T) {
+	d := NewDashboard(testDeps(t))
+	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	if cmd == nil {
 		t.Fatal("Update on 'q' returned no command; expected tea.Quit")
 	}
-	if updated, ok := out.(Model); !ok || !updated.quitting {
-		t.Fatalf("Update did not flag quitting; got model=%+v ok=%v", out, ok)
+}
+
+// TestDashboard_Tab_MovesFocus verifies FIX 2: pressing tab advances focus
+// through the panels and the change is visible in the rendered frame.
+func TestDashboard_Tab_MovesFocus(t *testing.T) {
+	// Force color rendering so the focus-border color difference is visible
+	// in the rendered frame even off a TTY.
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	d := NewDashboard(testDeps(t))
+	before := d.View()
+
+	out, _ := d.Update(tea.KeyMsg{Type: tea.KeyTab})
+	moved := out.(Dashboard)
+	if moved.focusIdx != 1 {
+		t.Fatalf("after tab, focusIdx = %d; want 1", moved.focusIdx)
+	}
+	if moved.View() == before {
+		t.Fatal("View did not change after tab; focus border did not move")
+	}
+
+	// Wrap-around: from last panel, tab returns to the first.
+	out, _ = moved.Update(tea.KeyMsg{Type: tea.KeyTab})
+	out, _ = out.(Dashboard).Update(tea.KeyMsg{Type: tea.KeyTab})
+	if got := out.(Dashboard).focusIdx; got != 0 {
+		t.Fatalf("after wrap, focusIdx = %d; want 0", got)
 	}
 }
 
-func TestModel_Update_OtherKey_Noop(t *testing.T) {
-	m := New()
-	out, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-	if cmd != nil {
-		t.Fatalf("Update on 'x' returned a command; expected nil")
+// TestDashboard_JobError_PopsErrorModal verifies FIX A: a terminal PhaseError
+// job event pops the error overlay with the event's error and the hint
+// extracted from a wrapped *errs.Error.
+func TestDashboard_JobError_PopsErrorModal(t *testing.T) {
+	ch := make(chan jobs.Event)
+	wrapped := &errs.Error{Op: "backup", Code: errs.CodeUser, Cause: errors.New("boom"), Hint: "fix the profile"}
+	evt := panels.JobEventInternal{
+		Event: jobs.Event{JobID: "j1", Stage: "dump", Phase: jobs.PhaseError, Err: wrapped},
+		Ch:    ch,
 	}
-	if updated, ok := out.(Model); !ok || updated.quitting {
-		t.Fatalf("Update flagged quitting on 'x'; should not")
+
+	d := NewDashboard(testDeps(t))
+	out, _ := d.Update(evt)
+	got := out.(Dashboard)
+	if got.errModal == nil {
+		t.Fatal("PhaseError event did not pop the error modal")
+	}
+	view := got.errModal.View()
+	if !strings.Contains(view, "fix the profile") {
+		t.Fatalf("error modal missing hint from wrapped *errs.Error; got:\n%s", view)
+	}
+}
+
+// TestProfiles_FilteringDisabled verifies FIX B: the profiles list has
+// filtering disabled, so '/' cannot open a filter that 'q' quits the app from.
+func TestProfiles_FilteringDisabled(t *testing.T) {
+	p := panels.NewProfiles(testDeps(t))
+	if p.FilteringEnabled() {
+		t.Fatal("profiles list filtering is enabled; expected it disabled (FIX B)")
+	}
+}
+
+// TestNewRestore_AdaptiveDumpIDField verifies that NewRestore builds without
+// panic for both an empty catalog and a seeded catalog.
+func TestNewRestore_AdaptiveDumpIDField(t *testing.T) {
+	t.Run("empty catalog builds form", func(t *testing.T) {
+		d := testDeps(t)
+		form, res := modals.NewRestore(d, "", "")
+		if form == nil {
+			t.Fatal("NewRestore returned nil form for empty catalog")
+		}
+		if res == nil {
+			t.Fatal("NewRestore returned nil result for empty catalog")
+		}
+	})
+
+	t.Run("seeded catalog builds form", func(t *testing.T) {
+		d := testDeps(t)
+		meta := &dumps.Meta{
+			ID:      "01JABCDEFGHJKMNPQRSTVWXYZ0",
+			Profile: "default",
+			Driver:  "postgres",
+			Created: time.Now(),
+		}
+		if err := d.Dumps.WriteMeta(meta); err != nil {
+			t.Fatalf("WriteMeta: %v", err)
+		}
+		form, res := modals.NewRestore(d, "", "")
+		if form == nil {
+			t.Fatal("NewRestore returned nil form for seeded catalog")
+		}
+		if res == nil {
+			t.Fatal("NewRestore returned nil result for seeded catalog")
+		}
+	})
+}
+
+// TestDashboard_FormHint verifies that View() renders the correct
+// formKind-aware command-row hint when a form is active.
+func TestDashboard_FormHint(t *testing.T) {
+	t.Run("backup form shows select hint", func(t *testing.T) {
+		d := NewDashboard(testDeps(t))
+		out, _ := d.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		dash := out.(Dashboard)
+		opened, _ := dash.openBackup()
+		view := opened.(Dashboard).View()
+		for _, want := range []string{"↑/↓ select", "enter confirm", "esc cancel"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("backup form View() missing %q; got:\n%s", want, view)
+			}
+		}
+	})
+
+	t.Run("restore form shows filter hint", func(t *testing.T) {
+		d := NewDashboard(testDeps(t))
+		out, _ := d.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		dash := out.(Dashboard)
+		opened, _ := dash.openRestore()
+		view := opened.(Dashboard).View()
+		for _, want := range []string{"↑/↓ select", "filter", "enter next", "esc cancel"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("restore form View() missing %q; got:\n%s", want, view)
+			}
+		}
+	})
+}
+
+// TestDashboard_EscCancelsForm verifies that pressing Escape while a backup or
+// restore form is active dismisses the form without dispatching any command.
+func TestDashboard_EscCancelsForm(t *testing.T) {
+	for _, name := range []string{"backup", "restore"} {
+		t.Run(name, func(t *testing.T) {
+			d := NewDashboard(testDeps(t))
+
+			// Open the relevant form.
+			var out tea.Model
+			if name == "backup" {
+				out, _ = d.openBackup()
+			} else {
+				out, _ = d.openRestore()
+			}
+			before := out.(Dashboard)
+			if before.form == nil {
+				t.Fatalf("form not set after open%s", name)
+			}
+
+			// Send Escape.
+			after, cmd := before.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			if after.(Dashboard).form != nil {
+				t.Fatal("form still set after Esc; expected it to be cleared (cancel)")
+			}
+			if cmd != nil {
+				t.Fatal("Esc cancel returned a non-nil command; expected nil")
+			}
+		})
 	}
 }
