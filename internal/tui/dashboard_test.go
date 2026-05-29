@@ -147,6 +147,36 @@ func TestNewRestore_AdaptiveDumpIDField(t *testing.T) {
 	})
 }
 
+// TestDashboard_FormHint verifies that View() renders the correct
+// formKind-aware command-row hint when a form is active.
+func TestDashboard_FormHint(t *testing.T) {
+	t.Run("backup form shows select hint", func(t *testing.T) {
+		d := NewDashboard(testDeps(t))
+		out, _ := d.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		dash := out.(Dashboard)
+		opened, _ := dash.openBackup()
+		view := opened.(Dashboard).View()
+		for _, want := range []string{"↑/↓ select", "enter confirm", "esc cancel"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("backup form View() missing %q; got:\n%s", want, view)
+			}
+		}
+	})
+
+	t.Run("restore form shows type dump id hint", func(t *testing.T) {
+		d := NewDashboard(testDeps(t))
+		out, _ := d.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		dash := out.(Dashboard)
+		opened, _ := dash.openRestore()
+		view := opened.(Dashboard).View()
+		for _, want := range []string{"↑/↓ select", "type dump id", "enter next", "esc cancel"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("restore form View() missing %q; got:\n%s", want, view)
+			}
+		}
+	})
+}
+
 // TestDashboard_EscCancelsForm verifies that pressing Escape while a backup or
 // restore form is active dismisses the form without dispatching any command.
 func TestDashboard_EscCancelsForm(t *testing.T) {

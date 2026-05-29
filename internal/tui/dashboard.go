@@ -165,7 +165,7 @@ func (d Dashboard) View() string {
 		return d.errModal.View()
 	}
 	if d.form != nil {
-		hint := styles.StatusBar.Width(d.width).Render("esc cancel · enter confirm/next")
+		hint := styles.StatusBar.Width(d.width).Render(d.formHint())
 		return d.form.View() + "\n" + hint
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -173,6 +173,18 @@ func (d Dashboard) View() string {
 	status := styles.StatusBar.Width(d.width).
 		Render("b backup · r restore · tab focus · q quit")
 	return body + "\n" + status
+}
+
+// formHint returns the command-row hint text for the currently active form.
+func (d Dashboard) formHint() string {
+	switch d.formKind {
+	case formBackup:
+		return "↑/↓ select · enter confirm · esc cancel"
+	case formRestore:
+		return "↑/↓ select · type dump id · enter next · esc cancel"
+	default:
+		return "enter next · esc cancel"
+	}
 }
 
 // updateForm routes a message to the active form and, on completion, fires
