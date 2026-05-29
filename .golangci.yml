@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+    - depguard
+  # Note: revive is intentionally NOT enabled in Phase A. Its `exported`
+  # rule would require doc comments on every exported symbol, which is
+  # bikeshedding at scaffold stage. Reconsider in a later phase.
+  settings:
+    depguard:
+      rules:
+        cli-may-not-import-domain:
+          list-mode: lax
+          files:
+            - "**/internal/cli/**"
+            - "!**/_test.go"
+          deny:
+            - pkg: "github.com/nixrajput/siphon/internal/driver"
+              desc: "CLI must go through internal/app, not Driver directly"
+        tui-may-not-import-cli:
+          list-mode: lax
+          files:
+            - "**/internal/tui/**"
+            - "!**/_test.go"
+          deny:
+            - pkg: "github.com/nixrajput/siphon/internal/cli"
+              desc: "TUI and CLI are siblings and may not depend on each other"
+        cli-may-not-import-tui-except-root:
+          list-mode: lax
+          files:
+            - "**/internal/cli/**"
+            - "!**/internal/cli/root.go"
+            - "!**/_test.go"
+          deny:
+            - pkg: "github.com/nixrajput/siphon/internal/tui"
+              desc: "Only the root command may launch the TUI"
+        driver-may-not-import-presentation:
+          list-mode: lax
+          files:
+            - "**/internal/driver/**"
+            - "!**/_test.go"
+          deny:
+            - pkg: "github.com/nixrajput/siphon/internal/cli"
+              desc: "Drivers must not depend on presentation"
+            - pkg: "github.com/nixrajput/siphon/internal/tui"
+              desc: "Drivers must not depend on presentation"
+            - pkg: "github.com/nixrajput/siphon/internal/app"
+              desc: "Drivers must not depend on Application — dependency flows down"
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
