@@ -1,10 +1,13 @@
 package dumps
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/nixrajput/siphon/internal/errs"
 )
 
 func TestCatalog_WriteRead_Roundtrip(t *testing.T) {
@@ -93,8 +96,13 @@ func TestCatalog_RejectsTraversalID(t *testing.T) {
 			t.Errorf("Delete(%q) = nil error; want rejection", bad)
 		}
 	}
-	// A clean ULID-like id is accepted (ReadMeta then fails only on not-found).
-	if _, err := c.ReadMeta("01HXKZ000000000000000000"); err == nil {
-		t.Skip("unexpected: a non-existent valid id should error as not-found, not pass")
+	// A clean ULID-like id passes validation, so ReadMeta proceeds and fails
+	// only because the dump doesn't exist — surfaced as errs.ErrDumpCorrupt.
+	_, err = c.ReadMeta("01HXKZ000000000000000000")
+	if err == nil {
+		t.Fatal("ReadMeta(valid-but-missing id) = nil error; want a not-found error")
+	}
+	if !errors.Is(err, errs.ErrDumpCorrupt) {
+		t.Fatalf("ReadMeta(valid-but-missing id) error = %v; want errs.ErrDumpCorrupt", err)
 	}
 }
