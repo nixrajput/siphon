@@ -15,6 +15,7 @@ type jobView struct {
 	stage    string
 	phase    jobs.Phase
 	message  string
+	err      error
 	progress progress.Model
 	bytes    int64
 	total    int64
@@ -81,6 +82,7 @@ func (p *Jobs) absorb(e jobs.Event) {
 	}
 	view.phase = e.Phase
 	view.message = e.Message
+	view.err = e.Err
 	if e.Progress != nil {
 		view.bytes = e.Progress.BytesDone
 		view.total = e.Progress.BytesTotal
@@ -102,6 +104,9 @@ func (p Jobs) View() string {
 			bar = j.progress.ViewAs(float64(j.bytes) / float64(j.total))
 		}
 		body += fmt.Sprintf("%-6s  %s %s\n%s\n", j.stage, j.phase.String(), j.message, bar)
+		if (j.phase == jobs.PhaseError || j.phase == jobs.PhaseCancelled) && j.err != nil {
+			body += styles.Err.Render(j.err.Error()) + "\n"
+		}
 	}
 	return border.Render(body)
 }

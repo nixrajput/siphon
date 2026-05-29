@@ -4,6 +4,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/nixrajput/siphon/internal/app"
+	"github.com/nixrajput/siphon/internal/errs"
+	"github.com/nixrajput/siphon/internal/jobs"
 	"github.com/nixrajput/siphon/internal/tui/modals"
 	"github.com/nixrajput/siphon/internal/tui/panels"
 	"github.com/nixrajput/siphon/internal/tui/styles"
@@ -119,6 +122,28 @@ func (d Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panels.JobEventInternal:
 		updated, cmd := d.jobs.Update(msg)
 		*d.jobs = updated.(panels.Jobs)
+		// React to the runner's terminal event (sent as a normal event before
+		// the channel closes): surface failures and refresh the catalog.
+		switch msg.Event.Phase {
+		case jobs.PhaseError, jobs.PhaseCancelled:
+			err := msg.Event.Err
+			if err == nil {
+				if msg.Event.Message != "" {
+					err = errors.New(msg.Event.Message)
+				} else {
+					err = errors.New("job failed")
+				}
+			}
+			hint := ""
+			var se *errs.Error
+			if errors.As(err, &se) {
+				hint = se.Hint
+			}
+			em := modals.NewError(err, hint)
+			d.errModal = &em
+		case jobs.PhaseDone:
+			d.dumps.Reload()
+		}
 		return d, cmd
 	case ErrorMsg:
 		em := modals.NewError(msg.Err, msg.Hint)

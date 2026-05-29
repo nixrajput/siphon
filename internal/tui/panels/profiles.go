@@ -34,6 +34,10 @@ func NewProfiles(d app.Deps) Profiles {
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
 	l.DisableQuitKeybindings()
+	// Filtering isn't a Phase C feature, and the dashboard's global key routing
+	// intercepts q/b/r before the list, so '/' would open a filter that 'q'
+	// quits the whole app out of. Disable it for safety + consistency with Dumps.
+	l.SetFilteringEnabled(false)
 	return Profiles{deps: d, list: l}
 }
 
@@ -82,6 +86,9 @@ func (p Profiles) SelectedName() string {
 
 // Reload re-reads the profile list. Call after add/remove.
 func (p *Profiles) Reload() { p.list.SetItems(loadItems(p.deps)) }
+
+// FilteringEnabled reports whether the underlying list accepts filter input.
+func (p Profiles) FilteringEnabled() bool { return p.list.FilteringEnabled() }
 
 // Compile-time check.
 var _ tea.Model = Profiles{}

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,8 +12,11 @@ import (
 	"github.com/nixrajput/siphon/internal/app"
 	"github.com/nixrajput/siphon/internal/config"
 	"github.com/nixrajput/siphon/internal/dumps"
+	"github.com/nixrajput/siphon/internal/errs"
+	"github.com/nixrajput/siphon/internal/jobs"
 	"github.com/nixrajput/siphon/internal/profile"
 	"github.com/nixrajput/siphon/internal/secrets"
+	"github.com/nixrajput/siphon/internal/tui/panels"
 )
 
 func testDeps(t *testing.T) app.Deps {
@@ -71,5 +75,37 @@ func TestDashboard_Tab_MovesFocus(t *testing.T) {
 	out, _ = out.(Dashboard).Update(tea.KeyMsg{Type: tea.KeyTab})
 	if got := out.(Dashboard).focusIdx; got != 0 {
 		t.Fatalf("after wrap, focusIdx = %d; want 0", got)
+	}
+}
+
+// TestDashboard_JobError_PopsErrorModal verifies FIX A: a terminal PhaseError
+// job event pops the error overlay with the event's error and the hint
+// extracted from a wrapped *errs.Error.
+func TestDashboard_JobError_PopsErrorModal(t *testing.T) {
+	ch := make(chan jobs.Event)
+	wrapped := &errs.Error{Op: "backup", Code: errs.CodeUser, Cause: errors.New("boom"), Hint: "fix the profile"}
+	evt := panels.JobEventInternal{
+		Event: jobs.Event{JobID: "j1", Stage: "dump", Phase: jobs.PhaseError, Err: wrapped},
+		Ch:    ch,
+	}
+
+	d := NewDashboard(testDeps(t))
+	out, _ := d.Update(evt)
+	got := out.(Dashboard)
+	if got.errModal == nil {
+		t.Fatal("PhaseError event did not pop the error modal")
+	}
+	view := got.errModal.View()
+	if !strings.Contains(view, "fix the profile") {
+		t.Fatalf("error modal missing hint from wrapped *errs.Error; got:\n%s", view)
+	}
+}
+
+// TestProfiles_FilteringDisabled verifies FIX B: the profiles list has
+// filtering disabled, so '/' cannot open a filter that 'q' quits the app from.
+func TestProfiles_FilteringDisabled(t *testing.T) {
+	p := panels.NewProfiles(testDeps(t))
+	if p.FilteringEnabled() {
+		t.Fatal("profiles list filtering is enabled; expected it disabled (FIX B)")
 	}
 }
