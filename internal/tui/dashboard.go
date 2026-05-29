@@ -181,7 +181,7 @@ func (d Dashboard) formHint() string {
 	case formBackup:
 		return "↑/↓ select · enter confirm · esc cancel"
 	case formRestore:
-		return "↑/↓ select · type dump id · enter next · esc cancel"
+		return "↑/↓ select · / filter · enter next · esc cancel"
 	default:
 		return "enter next · esc cancel"
 	}

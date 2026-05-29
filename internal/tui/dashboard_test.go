@@ -163,13 +163,13 @@ func TestDashboard_FormHint(t *testing.T) {
 		}
 	})
 
-	t.Run("restore form shows type dump id hint", func(t *testing.T) {
+	t.Run("restore form shows filter hint", func(t *testing.T) {
 		d := NewDashboard(testDeps(t))
 		out, _ := d.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 		dash := out.(Dashboard)
 		opened, _ := dash.openRestore()
 		view := opened.(Dashboard).View()
-		for _, want := range []string{"↑/↓ select", "type dump id", "enter next", "esc cancel"} {
+		for _, want := range []string{"↑/↓ select", "filter", "enter next", "esc cancel"} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("restore form View() missing %q; got:\n%s", want, view)
 			}

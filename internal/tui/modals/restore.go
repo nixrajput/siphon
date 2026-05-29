@@ -32,8 +32,9 @@ func NewRestore(d app.Deps, defaultProfile, defaultDump string) (*huh.Form, *Res
 			opts[i] = huh.NewOption(m.ID, m.ID)
 		}
 		dumpIDField = huh.NewSelect[string]().
-			Title("Dump ID").
+			Title("Dump ID (/ to filter)").
 			Options(opts...).
+			Filtering(true).
 			Value(&res.DumpID)
 	} else {
 		dumpIDField = huh.NewInput().
