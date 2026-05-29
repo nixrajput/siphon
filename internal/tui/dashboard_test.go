@@ -109,3 +109,34 @@ func TestProfiles_FilteringDisabled(t *testing.T) {
 		t.Fatal("profiles list filtering is enabled; expected it disabled (FIX B)")
 	}
 }
+
+// TestDashboard_EscCancelsForm verifies that pressing Escape while a backup or
+// restore form is active dismisses the form without dispatching any command.
+func TestDashboard_EscCancelsForm(t *testing.T) {
+	for _, name := range []string{"backup", "restore"} {
+		t.Run(name, func(t *testing.T) {
+			d := NewDashboard(testDeps(t))
+
+			// Open the relevant form.
+			var out tea.Model
+			if name == "backup" {
+				out, _ = d.openBackup()
+			} else {
+				out, _ = d.openRestore()
+			}
+			before := out.(Dashboard)
+			if before.form == nil {
+				t.Fatalf("form not set after open%s", name)
+			}
+
+			// Send Escape.
+			after, cmd := before.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			if after.(Dashboard).form != nil {
+				t.Fatal("form still set after Esc; expected it to be cleared (cancel)")
+			}
+			if cmd != nil {
+				t.Fatal("Esc cancel returned a non-nil command; expected nil")
+			}
+		})
+	}
+}

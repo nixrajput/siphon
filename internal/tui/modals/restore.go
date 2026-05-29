@@ -20,11 +20,9 @@ type RestoreResult struct {
 func NewRestore(d app.Deps, defaultProfile, defaultDump string) (*huh.Form, *RestoreResult) {
 	res := &RestoreResult{Profile: defaultProfile, DumpID: defaultDump}
 	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().Title("Target profile").Options(profileOptions(d)...).Value(&res.Profile),
-			huh.NewInput().Title("Dump ID").Value(&res.DumpID),
-			huh.NewConfirm().Title("Clean target before restore?").Affirmative("Yes").Negative("No").Value(&res.Clean),
-		),
+		huh.NewGroup(huh.NewSelect[string]().Title("Target profile").Options(profileOptions(d)...).Value(&res.Profile)),
+		huh.NewGroup(huh.NewInput().Title("Dump ID").Value(&res.DumpID)),
+		huh.NewGroup(huh.NewConfirm().Title("Clean target before restore?").Affirmative("Yes").Negative("No").Value(&res.Clean)),
 	)
 	return form, res
 }

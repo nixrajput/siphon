@@ -165,7 +165,8 @@ func (d Dashboard) View() string {
 		return d.errModal.View()
 	}
 	if d.form != nil {
-		return d.form.View()
+		hint := styles.StatusBar.Width(d.width).Render("esc cancel · enter confirm/next")
+		return d.form.View() + "\n" + hint
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
 		d.profiles.View(), d.dumps.View(), d.jobs.View())
@@ -177,6 +178,11 @@ func (d Dashboard) View() string {
 // updateForm routes a message to the active form and, on completion, fires
 // the corresponding app verb. On abort it tears the form down.
 func (d Dashboard) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Esc cancels the form without dispatching.
+	if k, ok := msg.(tea.KeyMsg); ok && k.Type == tea.KeyEsc {
+		d.clearForm()
+		return d, nil
+	}
 	model, cmd := d.form.Update(msg)
 	if f, ok := model.(*huh.Form); ok {
 		d.form = f
