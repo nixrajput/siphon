@@ -25,6 +25,7 @@ type jobView struct {
 // subscription pump.
 type Jobs struct {
 	jobs    map[string]*jobView
+	order   []string // job IDs in first-seen order, for deterministic rendering
 	focused bool
 }
 
@@ -79,6 +80,7 @@ func (p *Jobs) absorb(e jobs.Event) {
 			progress: progress.New(progress.WithDefaultGradient()),
 		}
 		p.jobs[e.JobID] = view
+		p.order = append(p.order, e.JobID) // record first-seen order
 	}
 	view.phase = e.Phase
 	view.message = e.Message
@@ -98,7 +100,13 @@ func (p Jobs) View() string {
 		return border.Render(styles.PanelTitle.Render("Jobs") + "\n" + styles.Dim.Render("(idle)"))
 	}
 	body := styles.PanelTitle.Render("Jobs") + "\n"
-	for _, j := range p.jobs {
+	// Iterate in first-seen order (p.order) rather than ranging the map, so rows
+	// render deterministically and don't jump between frames.
+	for _, id := range p.order {
+		j, ok := p.jobs[id]
+		if !ok {
+			continue // defensive: skip any id without a backing view
+		}
 		bar := ""
 		if j.total > 0 {
 			bar = j.progress.ViewAs(float64(j.bytes) / float64(j.total))
