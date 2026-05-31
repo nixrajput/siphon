@@ -17,7 +17,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ---
 
 > [!WARNING]
-> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). MySQL/MariaDB, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, …).
+> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). The driver layer is hardened with a shared cross-driver test harness, capability gating, and connection retry (Phase D), so MySQL/MariaDB can land mechanically next. MySQL/MariaDB, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, `phase-d`, …).
 
 ## Table of contents
 
@@ -47,16 +47,16 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Project status
 
-| Phase                             | What it delivers                                                                                                                                                | Status      |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI | ✅ Complete |
-| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                            | ✅ Complete |
-| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                               | ✅ Complete |
-| **D** — Driver hardening          | Shared cross-driver test harness, capability gating, retry policy                                                                                               | ⏳ Planned  |
-| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                | ⏳ Planned  |
-| **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                           | ⏳ Planned  |
-| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                | ⏳ Planned  |
-| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                               | ⏳ Planned  |
+| Phase                             | What it delivers                                                                                                                                                                | Status      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI                 | ✅ Complete |
+| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                            | ✅ Complete |
+| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                               | ✅ Complete |
+| **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide | ✅ Complete |
+| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                                | ⏳ Planned  |
+| **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                                           | ⏳ Planned  |
+| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                                | ⏳ Planned  |
+| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                               | ⏳ Planned  |
 
 ## Requirements
 
@@ -121,19 +121,19 @@ Exit codes follow a POSIX-friendly taxonomy (`0` ok, `1` user error, `2` system 
 
 ## Commands
 
-| Command                              | Description                                                    |
-| ------------------------------------ | -------------------------------------------------------------- |
-| `siphon backup [profile]`            | Dump a database to a checksummed file in the catalog           |
-| `siphon restore [dump-id]`           | Load a dump into a database (`--clean` to drop-and-recreate)   |
-| `siphon sync [from] [to]`            | Backup + restore in one streamed pass                          |
-| `siphon verify <dump-id>`            | Re-hash a dump and check it against its recorded checksum      |
-| `siphon inspect <profile>`           | Show tables, row estimates, and sizes for a profile            |
-| `siphon dumps list\|inspect\|prune`  | List, inspect, or prune saved dumps                            |
-| `siphon profile add\|list\|show\|rm` | Manage named connection profiles                               |
-| `siphon config path\|edit`           | Show or edit the config file                                   |
-| `siphon schedule`                    | Cron-managed recurring backups _(Phase G)_                     |
-| `siphon tunnel`                      | SSH tunnel helper _(Phase G)_                                  |
-| `siphon` _(bare)_                    | Launch the interactive multi-panel dashboard                   |
+| Command                              | Description                                                  |
+| ------------------------------------ | ------------------------------------------------------------ |
+| `siphon backup [profile]`            | Dump a database to a checksummed file in the catalog         |
+| `siphon restore [dump-id]`           | Load a dump into a database (`--clean` to drop-and-recreate) |
+| `siphon sync [from] [to]`            | Backup + restore in one streamed pass                        |
+| `siphon verify <dump-id>`            | Re-hash a dump and check it against its recorded checksum    |
+| `siphon inspect <profile>`           | Show tables, row estimates, and sizes for a profile          |
+| `siphon dumps list\|inspect\|prune`  | List, inspect, or prune saved dumps                          |
+| `siphon profile add\|list\|show\|rm` | Manage named connection profiles                             |
+| `siphon config path\|edit`           | Show or edit the config file                                 |
+| `siphon schedule`                    | Cron-managed recurring backups _(Phase G)_                   |
+| `siphon tunnel`                      | SSH tunnel helper _(Phase G)_                                |
+| `siphon` _(bare)_                    | Launch the interactive multi-panel dashboard                 |
 
 Run `siphon <command> --help` for full flags.
 
@@ -216,6 +216,8 @@ Distribution (Homebrew, Scoop, install script, signed release binaries) lands in
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), keep changes within the layered architecture (depguard will tell you if you stray), and make sure `make test` and `make lint` pass before opening a PR.
+
+Adding a new database engine? See [docs/DRIVERS.md](docs/DRIVERS.md) for the driver contributor guide.
 
 ## License
 
