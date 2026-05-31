@@ -33,11 +33,21 @@ func (m ErrorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m ErrorModel) View() string {
-	body := fmt.Sprintf("%s\n\n%s", styles.Err.Render("✗ "+m.err.Error()), m.hint)
+	// Guard against a nil error (NewError is exported, so a caller could pass
+	// one) and clamp the box width so a zero/small terminal width never yields
+	// a negative or absurdly narrow box.
+	msg := "unknown error"
+	if m.err != nil {
+		msg = m.err.Error()
+	}
+	available := m.width - 4
+	if available < 20 {
+		available = 20
+	}
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#fb7185")).
 		Padding(1, 2).
-		Width(min(80, m.width-4))
-	return box.Render(body)
+		Width(min(80, available))
+	return box.Render(fmt.Sprintf("%s\n\n%s", styles.Err.Render("✗ "+msg), m.hint))
 }
