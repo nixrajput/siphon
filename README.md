@@ -17,7 +17,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ---
 
 > [!WARNING]
-> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B). MySQL/MariaDB, the interactive dashboard, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, …).
+> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). MySQL/MariaDB, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, …).
 
 ## Table of contents
 
@@ -41,7 +41,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 - **One CLI, many databases.** Postgres works today; MySQL and MariaDB land in v1.0 (sharing a common backend). The driver interface is engine-agnostic, so SQLite, MongoDB, SQL Server, and ClickHouse can follow.
 - **Native, not reimplemented.** siphon shells out to `pg_dump`/`pg_restore` (and `mysqldump`/`mariadb-dump` in v1.0) for the actual data movement — you inherit 20+ years of correctness from the official tools, wrapped in a consistent UX.
 - **Integrity by default.** Every dump is checksummed (SHA-256) and recorded in a sidecar metadata file. `siphon verify` re-hashes the dump and flags corruption or tampering — and fails with a distinct exit code so CI can catch it.
-- **Built for scripts and humans.** A Cobra command tree with predictable flags and POSIX exit codes for automation; a Bubble Tea dashboard (Phase C) when you invoke `siphon` bare.
+- **Built for scripts and humans.** A Cobra command tree with predictable flags and POSIX exit codes for automation; an interactive Bubble Tea dashboard when you invoke `siphon` bare.
 - **Named profiles + secret refs.** Store connection details once; reference secrets as `env:VAR` today, with OS keychain / Vault / 1Password / AWS Secrets Manager backends on the roadmap. Plaintext passwords never have to live in your config.
 - **Streaming sync.** `siphon sync src dst` pipes a backup straight into a restore with no intermediate file on disk.
 
@@ -51,7 +51,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI | ✅ Complete |
 | **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                            | ✅ Complete |
-| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard with live job progress                                                                                                         | ⏳ Planned  |
+| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                               | ✅ Complete |
 | **D** — Driver hardening          | Shared cross-driver test harness, capability gating, retry policy                                                                                               | ⏳ Planned  |
 | **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                | ⏳ Planned  |
 | **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                           | ⏳ Planned  |
@@ -133,7 +133,7 @@ Exit codes follow a POSIX-friendly taxonomy (`0` ok, `1` user error, `2` system 
 | `siphon config path\|edit`           | Show or edit the config file                                   |
 | `siphon schedule`                    | Cron-managed recurring backups _(Phase G)_                     |
 | `siphon tunnel`                      | SSH tunnel helper _(Phase G)_                                  |
-| `siphon` _(bare)_                    | Launch the interactive dashboard _(real dashboard in Phase C)_ |
+| `siphon` _(bare)_                    | Launch the interactive multi-panel dashboard                   |
 
 Run `siphon <command> --help` for full flags.
 

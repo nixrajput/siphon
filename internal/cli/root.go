@@ -35,7 +35,11 @@ func NewRoot(out, err io.Writer) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return tui.Run()
+				deps, depErr := buildDeps()
+				if depErr != nil {
+					return depErr
+				}
+				return tui.Run(deps)
 			}
 			return c.Help()
 		},
