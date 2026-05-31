@@ -17,7 +17,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ---
 
 > [!WARNING]
-> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). MySQL/MariaDB, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, …).
+> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). The driver layer is hardened with a shared cross-driver test harness, capability gating, and connection retry (Phase D), so MySQL/MariaDB can land mechanically next. MySQL/MariaDB, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, `phase-d`, …).
 
 ## Table of contents
 
@@ -52,7 +52,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 | **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI | ✅ Complete |
 | **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                            | ✅ Complete |
 | **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                               | ✅ Complete |
-| **D** — Driver hardening          | Shared cross-driver test harness, capability gating, retry policy                                                                                               | ⏳ Planned  |
+| **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability gating (`RequireCapability`), connection-probe retry, and a `docs/DRIVERS.md` contributor guide | ✅ Complete |
 | **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                | ⏳ Planned  |
 | **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                           | ⏳ Planned  |
 | **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                | ⏳ Planned  |
