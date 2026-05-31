@@ -1,4 +1,4 @@
-package app
+package jobs
 
 import (
 	"context"
@@ -7,7 +7,8 @@ import (
 )
 
 // Retry runs op with exponential backoff + jitter, up to maxAttempts.
-// Returns the last error if all attempts fail.
+// Returns the last error if all attempts fail. Respects ctx cancellation
+// between attempts.
 func Retry(ctx context.Context, maxAttempts int, op func() error) error {
 	var err error
 	delay := 100 * time.Millisecond

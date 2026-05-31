@@ -11,6 +11,7 @@ import (
 
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
+	"github.com/nixrajput/siphon/internal/jobs"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // register pgx as a database/sql driver
 )
@@ -45,7 +46,10 @@ func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error
 	if err != nil {
 		return nil, wrapConnErr(err)
 	}
-	if err := db.PingContext(ctx); err != nil {
+
+	// Probe the connection with bounded retry (spec §4.3: 3 attempts,
+	// exponential backoff) so a briefly-unavailable server isn't a hard fail.
+	if err := jobs.Retry(ctx, 3, func() error { return db.PingContext(ctx) }); err != nil {
 		_ = db.Close()
 		return nil, wrapConnErr(err)
 	}
