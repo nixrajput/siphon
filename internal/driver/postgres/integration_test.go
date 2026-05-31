@@ -47,8 +47,7 @@ func startPostgres(t *testing.T) (driver.Profile, func(), func() (*sql.DB, error
 	}
 	cleanup := func() { _ = c.Terminate(ctx) }
 	opener := func() (*sql.DB, error) {
-		dsn := fmt.Sprintf("host=%s port=%d user=postgres password=postgres dbname=test sslmode=disable", prof.Host, prof.Port)
-		return sql.Open("pgx", dsn)
+		return sql.Open("pgx", buildDSN(prof))
 	}
 	return prof, cleanup, opener
 }
