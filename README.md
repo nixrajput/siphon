@@ -47,16 +47,16 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Project status
 
-| Phase                             | What it delivers                                                                                                                                                | Status      |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI | ✅ Complete |
-| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                            | ✅ Complete |
-| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                               | ✅ Complete |
+| Phase                             | What it delivers                                                                                                                                                                | Status      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI                 | ✅ Complete |
+| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                            | ✅ Complete |
+| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                               | ✅ Complete |
 | **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide | ✅ Complete |
-| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                | ⏳ Planned  |
-| **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                           | ⏳ Planned  |
-| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                | ⏳ Planned  |
-| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                               | ⏳ Planned  |
+| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                                | ⏳ Planned  |
+| **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                                           | ⏳ Planned  |
+| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                                | ⏳ Planned  |
+| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                               | ⏳ Planned  |
 
 ## Requirements
 
