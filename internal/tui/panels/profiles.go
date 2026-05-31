@@ -45,7 +45,12 @@ func loadItems(d app.Deps) []list.Item {
 	names := d.Profiles.List()
 	items := make([]list.Item, 0, len(names))
 	for _, n := range names {
-		p, _ := d.Profiles.Get(n)
+		p, err := d.Profiles.Get(n)
+		if err != nil {
+			// Skip rather than append a zero-value row — can't happen today
+			// (List and Get read the same map) but guards against future drift.
+			continue
+		}
 		items = append(items, profileItem{name: n, driver: p.Driver, host: p.Host})
 	}
 	return items
