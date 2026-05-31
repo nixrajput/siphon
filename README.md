@@ -217,6 +217,8 @@ Distribution (Homebrew, Scoop, install script, signed release binaries) lands in
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), keep changes within the layered architecture (depguard will tell you if you stray), and make sure `make test` and `make lint` pass before opening a PR.
 
+Adding a new database engine? See [docs/DRIVERS.md](docs/DRIVERS.md) for the driver contributor guide.
+
 ## License
 
 [MIT](LICENSE) © [Nikhil Rajput](https://github.com/nixrajput)
