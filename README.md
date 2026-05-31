@@ -121,19 +121,19 @@ Exit codes follow a POSIX-friendly taxonomy (`0` ok, `1` user error, `2` system 
 
 ## Commands
 
-| Command                              | Description                                                    |
-| ------------------------------------ | -------------------------------------------------------------- |
-| `siphon backup [profile]`            | Dump a database to a checksummed file in the catalog           |
-| `siphon restore [dump-id]`           | Load a dump into a database (`--clean` to drop-and-recreate)   |
-| `siphon sync [from] [to]`            | Backup + restore in one streamed pass                          |
-| `siphon verify <dump-id>`            | Re-hash a dump and check it against its recorded checksum      |
-| `siphon inspect <profile>`           | Show tables, row estimates, and sizes for a profile            |
-| `siphon dumps list\|inspect\|prune`  | List, inspect, or prune saved dumps                            |
-| `siphon profile add\|list\|show\|rm` | Manage named connection profiles                               |
-| `siphon config path\|edit`           | Show or edit the config file                                   |
-| `siphon schedule`                    | Cron-managed recurring backups _(Phase G)_                     |
-| `siphon tunnel`                      | SSH tunnel helper _(Phase G)_                                  |
-| `siphon` _(bare)_                    | Launch the interactive multi-panel dashboard                   |
+| Command                              | Description                                                  |
+| ------------------------------------ | ------------------------------------------------------------ |
+| `siphon backup [profile]`            | Dump a database to a checksummed file in the catalog         |
+| `siphon restore [dump-id]`           | Load a dump into a database (`--clean` to drop-and-recreate) |
+| `siphon sync [from] [to]`            | Backup + restore in one streamed pass                        |
+| `siphon verify <dump-id>`            | Re-hash a dump and check it against its recorded checksum    |
+| `siphon inspect <profile>`           | Show tables, row estimates, and sizes for a profile          |
+| `siphon dumps list\|inspect\|prune`  | List, inspect, or prune saved dumps                          |
+| `siphon profile add\|list\|show\|rm` | Manage named connection profiles                             |
+| `siphon config path\|edit`           | Show or edit the config file                                 |
+| `siphon schedule`                    | Cron-managed recurring backups _(Phase G)_                   |
+| `siphon tunnel`                      | SSH tunnel helper _(Phase G)_                                |
+| `siphon` _(bare)_                    | Launch the interactive multi-panel dashboard                 |
 
 Run `siphon <command> --help` for full flags.
 
