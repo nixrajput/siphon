@@ -29,11 +29,6 @@ func newBackupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if parallel > 1 {
-				if err := app.RequireCapability(deps, profileName, app.CapParallel); err != nil {
-					return err
-				}
-			}
 			ch, _, err := app.Backup(c.Context(), deps, app.BackupOpts{
 				Profile:          profileName,
 				IncludeTables:    includeTables,

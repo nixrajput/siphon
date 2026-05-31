@@ -27,13 +27,6 @@ func newSyncCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if stream {
-				for _, name := range []string{fromName, toName} {
-					if err := app.RequireCapability(deps, name, app.CapNativeStream); err != nil {
-						return err
-					}
-				}
-			}
 			ch, _, err := app.Sync(c.Context(), deps, app.SyncOpts{
 				From: fromName, To: toName, Stream: stream, Tables: tables,
 			})

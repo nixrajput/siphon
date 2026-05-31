@@ -24,7 +24,7 @@ that shells out to the engine's native tools for data movement (e.g.
 siphon is strictly layered; imports flow **downward only**, enforced at lint
 time by `golangci-lint`'s `depguard`:
 
-```
+```text
   internal/cli   internal/tui     presentation (Cobra · Bubble Tea)
         └──────┬───────┘
         internal/app              application verbs (backup, restore, sync, …)
@@ -120,13 +120,19 @@ type Capabilities struct {
 }
 ```
 
-**Declare these honestly.** The presentation layer gates affordances through
-`app.RequireCapability(deps, profileName, cap)` (in `internal/app/capgate.go`)
-before running a verb. If your driver declares `Parallel: false`, the CLI rejects
-`--jobs N` (with `N > 1`) up front with an `errs.ErrDriverUnsupported` error and
-an actionable hint — instead of crashing partway through. Over-declaring a
-capability you don't actually support turns that clean rejection into a runtime
-failure.
+**Declare these honestly.** A verb pre-flight can gate an affordance through
+`app.RequireCapability(deps, profileName, cap)` (in `internal/app/capgate.go`):
+if the resolved driver doesn't support `cap`, it returns an
+`errs.ErrDriverUnsupported` error with an actionable hint up front, instead of
+crashing partway through. Over-declaring a capability you don't actually support
+turns that clean rejection into a runtime failure.
+
+> **Status:** the gate helper and the `Capabilities` flags exist today, but the
+> verbs are only gated where a feature is actually wired. Native streaming
+> (`NativeStream`) and parallel backup (`Parallel`) are deferred to Phase F, so
+> `sync --stream` / `backup --jobs` are not yet gated — the gate will be wired in
+> alongside those features. Declare your flags honestly now so the gating is
+> correct the moment a verb starts honoring them.
 
 When you add support for a capability, flip its flag — that single change lights
 up the corresponding UI path.

@@ -4,12 +4,56 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
 )
+
+// seedCancelLoad bulk-loads a table of wide rows via the fixture's raw SQL
+// connection so a subsequent Backup has enough data to stay in-flight past the
+// cancel delay. Uses only portable SQL (CREATE TABLE + parameterized INSERT in
+// one transaction), so it works for any engine the harness is pointed at.
+func seedCancelLoad(t *testing.T, fx Fixtures) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	db, err := fx.SQLOpener()
+	if err != nil {
+		t.Fatalf("seedCancelLoad: SQLOpener: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if _, err := db.ExecContext(ctx,
+		`CREATE TABLE cancel_load (id integer primary key, payload text)`); err != nil {
+		t.Fatalf("seedCancelLoad: create table: %v", err)
+	}
+
+	// ~5000 rows of ~1 KiB each ≈ 5 MiB — large enough that the dump can't
+	// complete within the 150ms cancel window, small enough to load quickly.
+	// The payload is a fixed safe literal (no user input), so it's inlined
+	// rather than parameterized — this keeps the SQL placeholder-agnostic
+	// ($1 vs ? differs by engine) so the harness stays portable across drivers.
+	payload := strings.Repeat("x", 1024)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("seedCancelLoad: begin: %v", err)
+	}
+	for i := 0; i < 5000; i++ {
+		if _, err := tx.ExecContext(ctx,
+			"INSERT INTO cancel_load (id, payload) VALUES ("+strconv.Itoa(i)+", '"+payload+"')"); err != nil {
+			_ = tx.Rollback()
+			t.Fatalf("seedCancelLoad: insert %d: %v", i, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("seedCancelLoad: commit: %v", err)
+	}
+}
 
 // RunDriverSuite exercises the full Driver contract against a real
 // database. ctor returns the driver-under-test; fx provides the env.
@@ -79,6 +123,13 @@ func RunDriverSuite(t *testing.T, ctor func() driver.Driver, fx Fixtures) {
 	})
 
 	t.Run("Cancel_PropagatesToSubprocess", func(t *testing.T) {
+		// Inflate the database so the dump takes long enough that cancel()
+		// reliably lands while pg_dump (or the engine's equivalent) is still
+		// streaming. With only the round-trip subtest's tiny fixture, the dump
+		// can finish in well under the cancel delay on a fast host, making
+		// Backup return a clean nil and the assertion below spuriously fail.
+		seedCancelLoad(t, fx)
+
 		conn, err := d.Connect(context.Background(), fx.Profile)
 		if err != nil {
 			t.Fatalf("Connect: %v", err)
