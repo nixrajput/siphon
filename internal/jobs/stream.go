@@ -9,9 +9,10 @@ import (
 
 // Stream is a bounded in-memory pipe satisfying io.Reader, io.Writer, and
 // io.Closer. It replaces io.Pipe for streaming sync so backpressure is
-// observable: FillPercent reports how full the buffer is, which the TUI job
-// panel renders live. Safe for one writer goroutine + one reader goroutine,
-// and Close may be called from any goroutine (e.g. CloseOnCtx on cancel).
+// observable: FillPercent reports how full the buffer is (a metric a job-panel
+// view can surface; not yet rendered in the TUI). Safe for one writer goroutine
+// + one reader goroutine, and Close may be called from any goroutine (e.g.
+// CloseOnCtx on cancel).
 //
 // Close never closes the buffer channel s.ch — closing a channel concurrently
 // with a send is itself a data race (and a send on a closed channel panics).
@@ -23,7 +24,8 @@ type Stream struct {
 	ch        chan []byte
 	capChunks int
 	used      atomic.Int64
-	done      chan struct{} // closed by Close; signals writer-done to Write and Read
+	done      chan struct{}         // closed by Close/CloseErr; signals writer-done
+	closeErr  atomic.Pointer[error] // set before done is closed by CloseErr; nil means clean EOF
 	closeOnce sync.Once
 	overflow  []byte // leftover from the previous Read
 }
@@ -90,9 +92,19 @@ func (s *Stream) Read(p []byte) (int, error) {
 		case chunk := <-s.ch:
 			return s.deliver(p, chunk), nil
 		default:
-			return 0, io.EOF
+			return 0, s.endErr()
 		}
 	}
+}
+
+// endErr returns the error supplied to CloseErr, or io.EOF for a clean Close.
+// Read by Read only after observing s.done closed, so the closeErr store (which
+// happens before close(s.done) in CloseErr) is guaranteed visible.
+func (s *Stream) endErr() error {
+	if p := s.closeErr.Load(); p != nil {
+		return *p
+	}
+	return io.EOF
 }
 
 // deliver copies chunk into p, stashes any remainder as overflow, and
@@ -112,6 +124,23 @@ func (s *Stream) deliver(p, chunk []byte) int {
 // Idempotent.
 func (s *Stream) Close() error {
 	s.closeOnce.Do(func() {
+		close(s.done)
+	})
+	return nil
+}
+
+// CloseErr is like Close but causes Read to return err (instead of io.EOF)
+// once buffered chunks are drained — the bounded-buffer analogue of
+// io.PipeWriter.CloseWithError. A producer uses it to propagate a failure
+// (e.g. a truncated backup) to the consumer as a read error, so the consumer
+// doesn't mistake a partial stream for a clean end. A nil err behaves like
+// Close. Idempotent; the first Close/CloseErr wins. The error is stored before
+// s.done is closed, so any Read that observes done also observes the error.
+func (s *Stream) CloseErr(err error) error {
+	s.closeOnce.Do(func() {
+		if err != nil {
+			s.closeErr.Store(&err)
+		}
 		close(s.done)
 	})
 	return nil

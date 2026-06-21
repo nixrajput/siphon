@@ -11,6 +11,8 @@ func newSyncCmd() *cobra.Command {
 		fromName, toName string
 		stream           bool
 		tables           []string
+		crossEngine      bool
+		continuous       bool
 	)
 	cmd := &cobra.Command{
 		Use:   "sync [from] [to]",
@@ -29,6 +31,7 @@ func newSyncCmd() *cobra.Command {
 			}
 			ch, _, err := app.Sync(c.Context(), deps, app.SyncOpts{
 				From: fromName, To: toName, Stream: stream, Tables: tables,
+				CrossEngine: crossEngine, Continuous: continuous,
 			})
 			if err != nil {
 				return err
@@ -40,5 +43,7 @@ func newSyncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&toName, "to", "", "Target profile")
 	cmd.Flags().BoolVar(&stream, "stream", true, "Stream source→target without intermediate file")
 	cmd.Flags().StringSliceVar(&tables, "table", nil, "Limit to these tables")
+	cmd.Flags().BoolVar(&crossEngine, "cross-engine", false, "Translate between engines via canonical schema (requires cross-engine driver support; not yet available)")
+	cmd.Flags().BoolVar(&continuous, "continuous", false, "Continuously follow source changes (CDC); use `siphon cdc` (Phase F Task 10)")
 	return cmd
 }

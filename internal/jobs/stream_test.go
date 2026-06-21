@@ -2,10 +2,68 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 	"time"
 )
+
+// TestStream_CloseErr_PropagatesError locks in the failure-propagation contract
+// the streaming sync relies on: after CloseErr(err), Read must serve every
+// buffered chunk and then return that exact err (not io.EOF). A consumer
+// (Restore) thus sees a read error on a truncated stream instead of mistaking
+// it for a clean end — the bounded-buffer analogue of pipe CloseWithError.
+func TestStream_CloseErr_PropagatesError(t *testing.T) {
+	wantErr := errors.New("backup failed mid-dump")
+	s := NewStream(8)
+	const n = 3
+	for i := 0; i < n; i++ {
+		if _, err := s.Write([]byte("data")); err != nil {
+			t.Fatalf("Write %d: %v", i, err)
+		}
+	}
+	_ = s.CloseErr(wantErr)
+
+	// Drain: buffered chunks first (each a clean read), then the final error.
+	buf := make([]byte, 64)
+	var got int
+	var finalErr error
+	for {
+		nRead, err := s.Read(buf)
+		got += nRead
+		if err != nil {
+			finalErr = err
+			break
+		}
+	}
+	if want := n * len("data"); got != want {
+		t.Fatalf("drained %d bytes before error; want %d (chunks dropped)", got, want)
+	}
+	if !errors.Is(finalErr, wantErr) {
+		t.Fatalf("final Read error = %v; want %v", finalErr, wantErr)
+	}
+	if errors.Is(finalErr, io.EOF) {
+		t.Fatalf("final Read error must not be io.EOF on a failed stream")
+	}
+}
+
+// TestStream_CloseNilErr_YieldsEOF confirms a clean Close (and CloseErr(nil))
+// still ends with io.EOF — a nil error is not a failure.
+func TestStream_CloseNilErr_YieldsEOF(t *testing.T) {
+	s := NewStream(4)
+	if _, err := s.Write([]byte("ok")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	_ = s.CloseErr(nil) // nil err behaves like Close
+
+	out, err := io.ReadAll(s) // ReadAll treats io.EOF as success
+	if err != nil {
+		t.Fatalf("ReadAll after CloseErr(nil): %v; want clean EOF", err)
+	}
+	if string(out) != "ok" {
+		t.Fatalf("got %q; want %q", out, "ok")
+	}
+}
 
 func TestStream_WriteRead_Roundtrip(t *testing.T) {
 	s := NewStream(4)

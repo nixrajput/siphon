@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -17,8 +16,9 @@ import (
 )
 
 // syncFakeConn is a fakeConn variant whose Restore behaviour is configurable.
-// Backup writes a payload large enough (>64 KiB) to fill the kernel pipe buffer
-// so that pw.Write would block indefinitely if pr is never closed.
+// Backup writes a payload large enough to overflow the bounded jobs.Stream
+// buffer so that Write blocks indefinitely if the stream is never closed after
+// Restore returns early.
 type syncFakeConn struct {
 	restoreErr error
 	backupData []byte
@@ -29,8 +29,23 @@ func (c *syncFakeConn) Inspect(_ context.Context) (*driver.Schema, error) {
 }
 
 func (c *syncFakeConn) Backup(_ context.Context, _ driver.BackupOpts, w io.Writer) error {
-	_, err := io.Copy(w, bytes.NewReader(c.backupData))
-	return err
+	// Write in many small chunks rather than io.Copy(w, bytes.NewReader(...)):
+	// bytes.Reader implements io.WriterTo, so io.Copy would collapse the whole
+	// payload into a SINGLE w.Write call, which a bounded jobs.Stream accepts as
+	// one buffered chunk and never blocks on. Looping forces ≥64 separate Writes
+	// so the bounded buffer actually fills and the producer blocks when the
+	// reader (Restore) stops draining — which is the leak scenario under test.
+	const chunk = 64 * 1024
+	for off := 0; off < len(c.backupData); off += chunk {
+		end := off + chunk
+		if end > len(c.backupData) {
+			end = len(c.backupData)
+		}
+		if _, err := w.Write(c.backupData[off:end]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *syncFakeConn) Restore(_ context.Context, _ driver.RestoreOpts, _ io.Reader) error {
@@ -75,9 +90,13 @@ func (g syncDualGetter) Get(name string) (driver.Driver, error) {
 // channel closes) within a short timeout.  Before the pr.Close() fix the backup
 // goroutine's pw.Write would block forever, causing Sync to hang.
 func TestSync_PipeReaderClosed_NoGoroutineLeak(t *testing.T) {
-	// 128 KiB > typical pipe buffer (64 KiB on Linux/macOS), so pw.Write
-	// blocks if pr is not closed after Restore returns early.
-	bigPayload := make([]byte, 128*1024)
+	// The native sync path streams through a bounded jobs.Stream (64 chunks).
+	// io.Copy feeds it in ~32 KiB chunks, so the buffer holds ~2 MiB before a
+	// Write blocks. Use 8 MiB so the producer is guaranteed to block once the
+	// 64-chunk buffer fills — then if Restore returns early and the stream is
+	// NOT closed, the backup goroutine stays parked on Write forever (leak).
+	// Sync must close the stream after Restore returns to unblock it.
+	bigPayload := make([]byte, 8*1024*1024)
 
 	restoreErr := errors.New("restore failed intentionally")
 
