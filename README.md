@@ -17,7 +17,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ---
 
 > [!WARNING]
-> **Pre-1.0 — active development.** Postgres backup/restore/sync/verify/inspect work end-to-end today (Phase B), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). The driver layer is hardened with a shared cross-driver test harness, capability gating, and connection retry (Phase D), so MySQL/MariaDB can land mechanically next. MySQL/MariaDB, incremental backups, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, `phase-d`, …).
+> **Pre-1.0 — active development.** Postgres, MySQL, and MariaDB backup/restore/sync/verify/inspect work end-to-end today (Phases B + E), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). The driver layer is hardened with a shared cross-driver test harness, capability gating, and connection retry (Phase D). Incremental backups, cross-engine sync, and ops features are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a`, `phase-b`, `phase-c`, `phase-d`, `phase-e`, …).
 
 ## Table of contents
 
@@ -38,7 +38,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Why siphon
 
-- **One CLI, many databases.** Postgres works today; MySQL and MariaDB land in v1.0 (sharing a common backend). The driver interface is engine-agnostic, so SQLite, MongoDB, SQL Server, and ClickHouse can follow.
+- **One CLI, many databases.** Postgres, MySQL, and MariaDB all work today (MySQL and MariaDB share a common `_mysqlcommon` backend). The driver interface is engine-agnostic, so SQLite, MongoDB, SQL Server, and ClickHouse can follow.
 - **Native, not reimplemented.** siphon shells out to `pg_dump`/`pg_restore` (and `mysqldump`/`mariadb-dump` in v1.0) for the actual data movement — you inherit 20+ years of correctness from the official tools, wrapped in a consistent UX.
 - **Integrity by default.** Every dump is checksummed (SHA-256) and recorded in a sidecar metadata file. `siphon verify` re-hashes the dump and flags corruption or tampering — and fails with a distinct exit code so CI can catch it.
 - **Built for scripts and humans.** A Cobra command tree with predictable flags and POSIX exit codes for automation; an interactive Bubble Tea dashboard when you invoke `siphon` bare.
@@ -53,7 +53,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 | **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                            | ✅ Complete |
 | **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                               | ✅ Complete |
 | **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide | ✅ Complete |
-| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package                                                                                                                                | ⏳ Planned  |
+| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness       | ✅ Complete |
 | **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                                           | ⏳ Planned  |
 | **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                                | ⏳ Planned  |
 | **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                               | ⏳ Planned  |
@@ -61,14 +61,17 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ## Requirements
 
 - **[Go](https://go.dev/dl/) 1.26 or newer** — to build from source (the only install method until Phase H).
-- **PostgreSQL client tools** — `pg_dump`, `pg_restore`, and `psql` must be on your `PATH`. siphon shells out to them; it does not embed a Postgres client.
+- **Database client tools** — siphon shells out to the native dump/restore tools; it does not embed a client. You only need the tools for the engines you actually use:
+  - **PostgreSQL** profiles need `pg_dump`, `pg_restore`, `psql`.
+  - **MySQL** profiles need `mysqldump`, `mysql`.
+  - **MariaDB** profiles need `mariadb-dump`, `mariadb`.
 
-  | Platform      | Install                                                                                                         |
-  | ------------- | --------------------------------------------------------------------------------------------------------------- |
-  | macOS         | `brew install postgresql@16`                                                                                    |
-  | Debian/Ubuntu | `sudo apt install postgresql-client`                                                                            |
-  | Fedora/RHEL   | `sudo dnf install postgresql`                                                                                   |
-  | Windows       | Install the [EDB PostgreSQL](https://www.postgresql.org/download/windows/) package and add its `bin/` to `PATH` |
+  | Platform      | PostgreSQL                                                                                                      | MySQL / MariaDB                                       |
+  | ------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+  | macOS         | `brew install postgresql@16`                                                                                    | `brew install mysql-client` / `brew install mariadb`  |
+  | Debian/Ubuntu | `sudo apt install postgresql-client`                                                                            | `sudo apt install mysql-client mariadb-client`        |
+  | Fedora/RHEL   | `sudo dnf install postgresql`                                                                                   | `sudo dnf install mysql mariadb`                      |
+  | Windows       | Install the [EDB PostgreSQL](https://www.postgresql.org/download/windows/) package and add its `bin/` to `PATH` | Install the MySQL / MariaDB client and add to `PATH`  |
 
 - **Docker** _(optional)_ — only needed to run the integration test suite (`make test-integration`).
 
