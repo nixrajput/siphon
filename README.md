@@ -222,6 +222,8 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), keep 
 
 Adding a new database engine? See [docs/DRIVERS.md](docs/DRIVERS.md) for the driver contributor guide.
 
+Concept docs (honest as-built status — several paths are documented follow-ups): [docs/INCREMENTAL.md](docs/INCREMENTAL.md) (incremental restore works; the backup path is a follow-up), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md) (type-map matrix; `--cross-engine` is gated off pending typed introspection), and [docs/CDC.md](docs/CDC.md) (scaffold only; not yet runnable).
+
 ## License
 
 [MIT](LICENSE) © [Nikhil Rajput](https://github.com/nixrajput)
