@@ -18,7 +18,7 @@ func (Driver) Name() string { return "mysql" }
 
 func (Driver) Capabilities() driver.Capabilities {
 	return driver.Capabilities{
-		Incremental:        false, // Phase F (binlog)
+		Incremental:        true, // binlog (mysqlbinlog/mariadb-binlog)
 		NativeStream:       true,
 		PerTable:           true,
 		SchemaOnly:         true,
@@ -35,7 +35,7 @@ func (Driver) Capabilities() driver.Capabilities {
 }
 
 func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error) {
-	return mysqlcommon.NewConn(ctx, p, "mysqldump", "mysql", "mysql.connect")
+	return mysqlcommon.NewConn(ctx, p, "mysqldump", "mysql", "mysqlbinlog", "mysql.connect")
 }
 
 // Compile-time check.

@@ -16,6 +16,7 @@ func newRestoreCmd() *cobra.Command {
 		schemaOnly  bool
 		dataOnly    bool
 		clean       bool
+		upTo        string
 	)
 	cmd := &cobra.Command{
 		Use:   "restore [dump-id]",
@@ -39,6 +40,7 @@ func newRestoreCmd() *cobra.Command {
 				SchemaOnly:   schemaOnly,
 				DataOnly:     dataOnly,
 				Clean:        clean,
+				UpTo:         upTo,
 			})
 			if err != nil {
 				return err
@@ -52,5 +54,6 @@ func newRestoreCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&schemaOnly, "schema-only", false, "Schema, no data")
 	cmd.Flags().BoolVar(&dataOnly, "data-only", false, "Data, no schema")
 	cmd.Flags().BoolVar(&clean, "clean", false, "DROP objects before recreating")
+	cmd.Flags().StringVar(&upTo, "up-to", "", "Stop applying the incremental chain after this dump ID")
 	return cmd
 }

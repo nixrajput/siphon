@@ -47,16 +47,16 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Project status
 
-| Phase                             | What it delivers                                                                                                                                                                | Status      |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI                 | ✅ Complete |
-| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                            | ✅ Complete |
-| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                               | ✅ Complete |
-| **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide | ✅ Complete |
-| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness       | ✅ Complete |
-| **F** — Advanced transfer         | Incremental backups, bounded-buffer streaming, cross-engine sync, CDC                                                                                                           | ⏳ Planned  |
-| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                                | ⏳ Planned  |
-| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                               | ⏳ Planned  |
+| Phase                             | What it delivers                                                                                                                                                                                                                                                                                                                                                                                                                        | Status      |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI                                                                                                                                                                                                                                                                         | ✅ Complete |
+| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                                                                                                                                                                                                                                                                                    | ✅ Complete |
+| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                                                                                                                                                                                                                                                                                       | ✅ Complete |
+| **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide                                                                                                                                                                                                                                                         | ✅ Complete |
+| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness                                                                                                                                                                                                                                                             | ✅ Complete |
+| **F** — Advanced transfer         | Bounded-buffer streaming sync + chain-walking incremental restore work today; the dump envelope, incremental WAL/binlog capture, cross-engine type-mapping, and CDC state machinery are in place but their CLI paths (`backup --incremental`, `sync --cross-engine`, CDC) are gated pending follow-up wiring — see [docs/INCREMENTAL.md](docs/INCREMENTAL.md), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md), [docs/CDC.md](docs/CDC.md) | 🟡 Partial  |
+| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                                                                                                                                                                                                                                                                                        | ⏳ Planned  |
+| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                                                                                                                                                                                                                                                                                       | ⏳ Planned  |
 
 ## Requirements
 
@@ -66,12 +66,12 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
   - **MySQL** profiles need `mysqldump`, `mysql`.
   - **MariaDB** profiles need `mariadb-dump`, `mariadb` (the renamed binaries shipped by MariaDB 10.5+; older installs that only ship `mysqldump`/`mysql` are not yet supported).
 
-  | Platform      | PostgreSQL                                                                                                      | MySQL / MariaDB                                       |
-  | ------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-  | macOS         | `brew install postgresql@16`                                                                                    | `brew install mysql-client` / `brew install mariadb`  |
-  | Debian/Ubuntu | `sudo apt install postgresql-client`                                                                            | `sudo apt install mysql-client mariadb-client`        |
-  | Fedora/RHEL   | `sudo dnf install postgresql`                                                                                   | `sudo dnf install mysql mariadb`                      |
-  | Windows       | Install the [EDB PostgreSQL](https://www.postgresql.org/download/windows/) package and add its `bin/` to `PATH` | Install the MySQL / MariaDB client and add to `PATH`  |
+  | Platform      | PostgreSQL                                                                                                      | MySQL / MariaDB                                      |
+  | ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+  | macOS         | `brew install postgresql@16`                                                                                    | `brew install mysql-client` / `brew install mariadb` |
+  | Debian/Ubuntu | `sudo apt install postgresql-client`                                                                            | `sudo apt install mysql-client mariadb-client`       |
+  | Fedora/RHEL   | `sudo dnf install postgresql`                                                                                   | `sudo dnf install mysql mariadb`                     |
+  | Windows       | Install the [EDB PostgreSQL](https://www.postgresql.org/download/windows/) package and add its `bin/` to `PATH` | Install the MySQL / MariaDB client and add to `PATH` |
 
 - **Docker** _(optional)_ — only needed to run the integration test suite (`make test-integration`).
 
@@ -221,6 +221,8 @@ Distribution (Homebrew, Scoop, install script, signed release binaries) lands in
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), keep changes within the layered architecture (depguard will tell you if you stray), and make sure `make test` and `make lint` pass before opening a PR.
 
 Adding a new database engine? See [docs/DRIVERS.md](docs/DRIVERS.md) for the driver contributor guide.
+
+Concept docs (honest as-built status — several paths are documented follow-ups): [docs/INCREMENTAL.md](docs/INCREMENTAL.md) (incremental restore works; the backup path is a follow-up), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md) (type-map matrix; `--cross-engine` is gated off pending typed introspection), and [docs/CDC.md](docs/CDC.md) (scaffold only; not yet runnable).
 
 ## License
 

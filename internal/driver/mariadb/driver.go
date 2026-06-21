@@ -18,7 +18,7 @@ func (Driver) Name() string { return "mariadb" }
 
 func (Driver) Capabilities() driver.Capabilities {
 	return driver.Capabilities{
-		Incremental:        false, // Phase F (binlog)
+		Incremental:        true, // binlog (mysqlbinlog/mariadb-binlog)
 		NativeStream:       true,
 		PerTable:           true,
 		SchemaOnly:         true,
@@ -35,7 +35,7 @@ func (Driver) Capabilities() driver.Capabilities {
 }
 
 func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error) {
-	return mysqlcommon.NewConn(ctx, p, "mariadb-dump", "mariadb", "mariadb.connect")
+	return mysqlcommon.NewConn(ctx, p, "mariadb-dump", "mariadb", "mariadb-binlog", "mariadb.connect")
 }
 
 // Compile-time check.

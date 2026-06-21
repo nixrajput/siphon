@@ -78,6 +78,17 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 			h := sha256.New()
 			tee := io.MultiWriter(f, h)
 
+			env := &dumps.Envelope{
+				Type:    dumps.EnvelopeBase,
+				Driver:  resolved.Driver,
+				Created: time.Now().UTC(),
+			}
+			if _, err := dumps.WriteEnvelope(tee, env); err != nil {
+				_ = f.Close()
+				_ = os.Remove(tmpPath)
+				return err
+			}
+
 			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "dumping"})
 
 			backupErr := conn.Backup(ctx, driver.BackupOpts{
