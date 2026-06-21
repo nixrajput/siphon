@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"testing"
 	"time"
 )
@@ -177,15 +178,72 @@ func TestStream_PartialRead_Overflow(t *testing.T) {
 func TestStream_ConcurrentWriteCloseNoPanic(t *testing.T) {
 	// Stress the Write/Close race directly (run under -race). A concurrent
 	// Close must never panic the writer; Write must return without sending
-	// on a closed channel.
+	// on a closed channel. Join every goroutine so the stressed interleavings
+	// actually complete before the test returns (otherwise the test can pass
+	// before any race window is exercised).
+	var wg sync.WaitGroup
 	for i := 0; i < 200; i++ {
 		s := NewStream(1)
-		go func() { _ = s.Close() }()
-		go func() { _, _ = s.Write([]byte("x")) }()
+		wg.Add(3)
+		go func() { defer wg.Done(); _ = s.Close() }()
+		go func() { defer wg.Done(); _, _ = s.Write([]byte("x")) }()
 		go func() {
+			defer wg.Done()
 			buf := make([]byte, 8)
 			_, _ = s.Read(buf)
 		}()
+	}
+	wg.Wait()
+}
+
+// TestStream_ZeroLenRead_DoesNotBlock confirms the io.Reader contract: a Read
+// with a zero-length buffer returns (0, nil) immediately, even on an open and
+// empty stream where a blocking select would otherwise hang.
+func TestStream_ZeroLenRead_DoesNotBlock(t *testing.T) {
+	s := NewStream(4) // open, empty
+	done := make(chan struct{})
+	go func() {
+		n, err := s.Read(make([]byte, 0))
+		if n != 0 || err != nil {
+			t.Errorf("Read(empty) = (%d, %v); want (0, nil)", n, err)
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("zero-length Read blocked on an open empty stream")
+	}
+}
+
+// TestStream_LargeWrite_SplitsIntoChunks confirms a single Write larger than
+// maxChunk is split into multiple buffered chunks (so the bounded channel
+// actually bounds memory), reflected by FillPercent rising above one chunk's
+// worth.
+func TestStream_LargeWrite_SplitsIntoChunks(t *testing.T) {
+	const cap = 64
+	s := NewStream(cap)
+	// 4 MiB write => 4 chunks at 1 MiB each, all buffered without a reader.
+	big := make([]byte, 4*maxChunk)
+	n, err := s.Write(big)
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if n != len(big) {
+		t.Fatalf("Write returned %d; want %d", n, len(big))
+	}
+	// 4 buffered chunks out of cap 64 => 4*100/64 = 6%.
+	if got, want := s.FillPercent(), 4*100/cap; got != want {
+		t.Fatalf("FillPercent = %d; want %d (one big Write must buffer 4 chunks)", got, want)
+	}
+	// And it must round-trip intact once closed.
+	_ = s.Close()
+	out, err := io.ReadAll(s)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(out) != len(big) {
+		t.Fatalf("round-tripped %d bytes; want %d", len(out), len(big))
 	}
 }
 

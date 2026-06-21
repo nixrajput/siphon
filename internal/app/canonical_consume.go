@@ -1,35 +1,34 @@
 package app
 
 import (
-	"bufio"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 )
 
-// ConsumeCanonical reads a JSONL stream produced by EmitCanonical and replays
-// it into db using engine's dialect: line 1 is the schema header (used to
-// CREATE TABLE IF NOT EXISTS for each table), every subsequent line is a
+// ConsumeCanonical reads a stream produced by EmitCanonical and replays it into
+// db using engine's dialect: the first JSON value is the schema header (used to
+// CREATE TABLE IF NOT EXISTS for each table), every subsequent JSON value is a
 // CanonicalRow that is INSERTed. Values are always bound as parameters; only
 // identifiers are interpolated (quoted via quoteIdent).
+//
+// A json.Decoder reads successive JSON values directly, so there is no
+// token-size cap: a single large row can no longer abort the stream mid-replay
+// (which a bufio.Scanner's "token too long" would have done).
 func ConsumeCanonical(ctx context.Context, db *sql.DB, engine string, r io.Reader) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 1<<20), 16<<20)
-
-	if !sc.Scan() {
-		if err := sc.Err(); err != nil {
-			return fmt.Errorf("cross-engine: read schema header: %w", err)
-		}
-		return fmt.Errorf("cross-engine: empty stream, schema header missing")
-	}
+	dec := json.NewDecoder(r)
 
 	var header struct {
 		Schema *CanonicalSchema `json:"schema"`
 	}
-	if err := json.Unmarshal(sc.Bytes(), &header); err != nil {
+	if err := dec.Decode(&header); err != nil {
+		if errors.Is(err, io.EOF) {
+			return fmt.Errorf("cross-engine: empty stream, schema header missing")
+		}
 		return fmt.Errorf("cross-engine: decode schema header: %w", err)
 	}
 	if header.Schema == nil {
@@ -40,21 +39,17 @@ func ConsumeCanonical(ctx context.Context, db *sql.DB, engine string, r io.Reade
 		return err
 	}
 
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(strings.TrimSpace(string(line))) == 0 {
-			continue
-		}
+	for {
 		var row CanonicalRow
-		if err := json.Unmarshal(line, &row); err != nil {
+		if err := dec.Decode(&row); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
 			return fmt.Errorf("cross-engine: decode row: %w", err)
 		}
 		if err := insertRow(ctx, db, engine, row); err != nil {
 			return err
 		}
-	}
-	if err := sc.Err(); err != nil {
-		return fmt.Errorf("cross-engine: read rows: %w", err)
 	}
 	return nil
 }

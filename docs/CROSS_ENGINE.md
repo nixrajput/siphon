@@ -90,7 +90,10 @@ known precision/scale renders as e.g. `DECIMAL(10,2)`.
 The v1 cross-engine scope (once the path is wired) is **data only**:
 
 - Triggers, views, and stored functions are **skipped**.
-- Indexes are created but **not optimized** for the target engine.
+- Index recreation is **not implemented yet**: the consume path issues
+  `CREATE TABLE IF NOT EXISTS` (column definitions only) plus row INSERTs, so
+  only data and table structure transfer. Indexes and any constraints beyond the
+  inline column defs are a follow-up.
 - Foreign keys are **deferred**.
 - Engines covered by the matrix: `postgres`, `mysql`, `mariadb`. An unknown
   engine or an unmappable canonical type is an error from `MapToNative`.

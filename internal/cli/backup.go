@@ -38,6 +38,13 @@ func newBackupCmd() *cobra.Command {
 			// Postgres and binlog-position validation for MySQL/MariaDB. Tracked
 			// as a Phase F follow-up; rejected honestly here rather than
 			// half-wired into app.Backup.
+			if baseID != "" && !incremental {
+				return &errs.Error{
+					Op:   "backup",
+					Code: errs.CodeUser,
+					Hint: "--base requires --incremental",
+				}
+			}
 			if incremental {
 				return &errs.Error{
 					Op:    "backup.incremental",

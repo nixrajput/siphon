@@ -44,10 +44,18 @@ func NewStream(capChunks int) *Stream {
 	}
 }
 
-// Write enqueues a copy of p. Blocks when the buffer is full. Returns
-// io.ErrClosedPipe if the stream is closed. Because s.ch is never closed,
-// the send can never panic; the select simply abandons the send and returns
-// io.ErrClosedPipe if Close fires while Write is parked.
+// maxChunk bounds the size of a single buffered chunk. A large Write is split
+// into pieces of at most maxChunk bytes so the bounded channel actually bounds
+// memory to ~capChunks×maxChunk; otherwise one huge Write would enqueue the
+// whole slice as a single unbounded chunk.
+const maxChunk = 1 << 20 // 1 MiB
+
+// Write enqueues a copy of p, splitting it into chunks of at most maxChunk
+// bytes so the bounded channel bounds memory. Blocks when the buffer is full.
+// Returns io.ErrClosedPipe if the stream is closed. Because s.ch is never
+// closed, the send can never panic; the select simply abandons the send and
+// returns io.ErrClosedPipe if Close fires while Write is parked. Per the
+// io.Writer contract, a short write returns n < len(p) together with the error.
 func (s *Stream) Write(p []byte) (int, error) {
 	// Fast path: reject if already closed before allocating a copy.
 	select {
@@ -55,21 +63,35 @@ func (s *Stream) Write(p []byte) (int, error) {
 		return 0, io.ErrClosedPipe
 	default:
 	}
-	cp := make([]byte, len(p))
-	copy(cp, p)
-	select {
-	case <-s.done:
-		return 0, io.ErrClosedPipe
-	case s.ch <- cp:
-		s.used.Add(1)
-		return len(p), nil
+	written := 0
+	for written < len(p) {
+		end := written + maxChunk
+		if end > len(p) {
+			end = len(p)
+		}
+		piece := p[written:end]
+		cp := make([]byte, len(piece))
+		copy(cp, piece)
+		select {
+		case <-s.done:
+			return written, io.ErrClosedPipe
+		case s.ch <- cp:
+			s.used.Add(1)
+			written += len(piece)
+		}
 	}
+	return written, nil
 }
 
 // Read drains the buffer. Buffered chunks are always served first (even after
 // Close), so no data is lost; once the writer has Closed and the buffer is
 // empty, Read returns io.EOF.
 func (s *Stream) Read(p []byte) (int, error) {
+	// io.Reader contract: a zero-length read returns (0, nil) immediately and
+	// must not block waiting for data.
+	if len(p) == 0 {
+		return 0, nil
+	}
 	if len(s.overflow) > 0 {
 		n := copy(p, s.overflow)
 		s.overflow = s.overflow[n:]

@@ -51,7 +51,7 @@ func emitTable(ctx context.Context, db *sql.DB, engine string, t CanonicalTable,
 		}
 		m := make(map[string]any, len(t.Columns))
 		for i, c := range t.Columns {
-			m[c.Name] = vals[i]
+			m[c.Name] = normalizeScanned(vals[i])
 		}
 		if err := writeJSONL(w, CanonicalRow{Table: t.Name, Values: m}); err != nil {
 			return err
@@ -79,6 +79,18 @@ func buildSelectSQL(engine string, t CanonicalTable) (string, error) {
 		cols[i] = qc
 	}
 	return fmt.Sprintf("SELECT %s FROM %s", strings.Join(cols, ", "), qt), nil
+}
+
+// normalizeScanned converts a value scanned from database/sql into a form that
+// round-trips correctly through JSON. database/sql commonly yields []byte for
+// text/numeric/json columns; marshaling []byte to JSON produces base64, which
+// corrupts the value when ConsumeCanonical re-inserts it. Converting to string
+// makes it marshal as a JSON string instead, preserving the original bytes.
+func normalizeScanned(v any) any {
+	if b, ok := v.([]byte); ok {
+		return string(b)
+	}
+	return v
 }
 
 // writeJSONL marshals v and writes it followed by a newline.

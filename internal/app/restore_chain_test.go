@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/nixrajput/siphon/internal/config"
 	"github.com/nixrajput/siphon/internal/driver"
@@ -228,5 +229,96 @@ func TestRestoreChain_UpToUnknownErrors(t *testing.T) {
 	}
 	if len(conn.calls) != 0 {
 		t.Fatalf("driver received %d Restore calls; want 0 (error must be synchronous)", len(conn.calls))
+	}
+}
+
+// writeMismatchDump writes a single base dump whose envelope.Driver differs
+// from the target profile's driver ("fake"), so Restore must reject it before
+// any destructive Clean runs.
+func writeMismatchDump(t *testing.T, cat *dumps.Catalog, id, envDriver string) {
+	t.Helper()
+	f, err := os.Create(cat.Path(id))
+	if err != nil {
+		t.Fatalf("create dump %s: %v", id, err)
+	}
+	if _, err := dumps.WriteEnvelope(f, &dumps.Envelope{
+		Type:   dumps.EnvelopeBase,
+		Driver: envDriver,
+		BaseID: id,
+	}); err != nil {
+		_ = f.Close()
+		t.Fatalf("write envelope %s: %v", id, err)
+	}
+	if _, err := io.WriteString(f, "payload"); err != nil {
+		_ = f.Close()
+		t.Fatalf("write payload %s: %v", id, err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close dump %s: %v", id, err)
+	}
+	if err := cat.WriteMeta(&dumps.Meta{
+		ID:      id,
+		Profile: "test",
+		Driver:  envDriver,
+		BaseID:  id,
+	}); err != nil {
+		t.Fatalf("write meta %s: %v", id, err)
+	}
+}
+
+// TestRestoreChain_DriverMismatchRejectsBeforeClean proves a dump whose
+// envelope.Driver differs from the target profile's driver makes Restore return
+// a CodeUser/ErrIncompatibleEngine error and NEVER calls the driver's Restore —
+// so a destructive Clean cannot wipe the target before the mismatch is found.
+func TestRestoreChain_DriverMismatchRejectsBeforeClean(t *testing.T) {
+	conn := &chainFakeConn{}
+	dir := t.TempDir()
+	deps := chainDeps(t, dir, conn)
+	// Target profile driver is "fake"; this dump claims "postgres".
+	writeMismatchDump(t, deps.Dumps, "base", "postgres")
+
+	ch, _, err := Restore(context.Background(), deps, RestoreOpts{Profile: "test", DumpID: "base", Clean: true})
+	if err != nil {
+		t.Fatalf("Restore setup: %v", err)
+	}
+	gotErr := drainErr(t, ch)
+	if gotErr == nil {
+		t.Fatal("Restore with mismatched driver returned nil error; want incompatible-engine error")
+	}
+	var e *errs.Error
+	if !errors.As(gotErr, &e) {
+		t.Fatalf("error type = %T; want *errs.Error", gotErr)
+	}
+	if e.Code != errs.CodeUser {
+		t.Fatalf("error Code = %d; want CodeUser (%d)", e.Code, errs.CodeUser)
+	}
+	if !errors.Is(gotErr, errs.ErrIncompatibleEngine) {
+		t.Fatalf("error = %v; want ErrIncompatibleEngine", gotErr)
+	}
+	if len(conn.calls) != 0 {
+		t.Fatalf("driver Restore called %d times; want 0 (no destructive Clean on mismatch)", len(conn.calls))
+	}
+}
+
+// drainErr consumes a job event channel and returns the error from a
+// PhaseError event (or nil if the job completed cleanly), with a hard timeout.
+func drainErr(t *testing.T, ch <-chan jobs.Event) error {
+	t.Helper()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	var jobErr error
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return jobErr
+			}
+			if ev.Phase == jobs.PhaseError && ev.Err != nil {
+				jobErr = ev.Err
+			}
+		case <-timer.C:
+			t.Fatal("job did not complete within 5 s")
+			return nil
+		}
 	}
 }

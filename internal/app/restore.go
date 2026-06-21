@@ -60,10 +60,23 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 				if err != nil {
 					return err
 				}
-				_, body, err := dumps.ReadEnvelope(f)
+				env, body, err := dumps.ReadEnvelope(f)
 				if err != nil {
 					_ = f.Close()
 					return err
+				}
+				// Guard against a destructive Clean wiping the target before we
+				// discover the dump was produced by a different engine. Verify
+				// EVERY dump in the chain matches the target driver before the
+				// first (Clean) restore can run.
+				if env.Driver != resolved.Driver {
+					_ = f.Close()
+					return &errs.Error{
+						Op:    "restore",
+						Code:  errs.CodeUser,
+						Cause: errs.ErrIncompatibleEngine,
+						Hint:  "dump was created by " + env.Driver + "; cannot restore into a " + resolved.Driver + " target",
+					}
 				}
 				rOpts := driver.RestoreOpts{
 					TargetTables: opt.TargetTables,

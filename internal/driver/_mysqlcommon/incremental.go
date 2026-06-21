@@ -98,15 +98,55 @@ func (c *Conn) ValidateBinlogFormat(ctx context.Context) error {
 // environment (see BackupIncremental), never on the command line. The starting
 // binlog file is the final positional arg; --to-last-log continues through all
 // subsequent rotated files to the current end of the binlog.
-func binlogArgs(p driver.Profile, since BinlogPosition) []string {
-	return []string{
+//
+// SSL flags are fork-specific, keyed on binlogBinary: mysqlbinlog takes
+// --ssl-mode=<DISABLED|REQUIRED|VERIFY_CA|VERIFY_IDENTITY>, while
+// mariadb-binlog takes --ssl / --skip-ssl. The starting binlog file MUST stay
+// last (positional), so SSL flags are inserted before it.
+func binlogArgs(p driver.Profile, since BinlogPosition, binlogBinary string) []string {
+	args := []string{
 		"-h", p.Host,
 		"-P", strconv.Itoa(p.Port),
 		"-u", p.User,
 		"--read-from-remote-server",
 		"--to-last-log",
 		"--start-position=" + strconv.FormatUint(since.Position, 10),
-		since.File,
+	}
+	args = append(args, binlogSSLArgs(p.SSLMode, binlogBinary)...)
+	return append(args, since.File)
+}
+
+// binlogSSLArgs maps Profile.SSLMode to the fork-specific binlog TLS flags.
+// mysqlbinlog uses --ssl-mode=<level>; mariadb-binlog uses --ssl / --skip-ssl.
+// An empty/PREFERRED policy omits the flag entirely (the tool's default).
+func binlogSSLArgs(sslMode, binlogBinary string) []string {
+	switch binlogBinary {
+	case "mysqlbinlog":
+		var level string
+		switch sslMode {
+		case "disable":
+			level = "DISABLED"
+		case "require":
+			level = "REQUIRED"
+		case "verify-ca":
+			level = "VERIFY_CA"
+		case "verify-full":
+			level = "VERIFY_IDENTITY"
+		default:
+			level = "PREFERRED"
+		}
+		return []string{"--ssl-mode=" + level}
+	case "mariadb-binlog":
+		switch sslMode {
+		case "require", "verify-ca", "verify-full":
+			return []string{"--ssl"}
+		case "disable":
+			return []string{"--skip-ssl"}
+		default:
+			return nil // PREFERRED/empty: omit, use the tool's default
+		}
+	default:
+		return nil
 	}
 }
 
@@ -119,7 +159,7 @@ func binlogArgs(p driver.Profile, since BinlogPosition) []string {
 // needing --to-last-log need validation against a live log_bin=ON,
 // binlog_format=ROW server (see CI / the incremental wiring task).
 func (c *Conn) BackupIncremental(ctx context.Context, since BinlogPosition, w io.Writer) error {
-	cmd := exec.CommandContext(ctx, c.binlogBinary, binlogArgs(c.p, since)...)
+	cmd := exec.CommandContext(ctx, c.binlogBinary, binlogArgs(c.p, since, c.binlogBinary)...)
 	cmd.Env = withMySQLPwd(os.Environ(), c.p.Password)
 	cmd.Stdout = w
 	cmd.Stderr = os.Stderr

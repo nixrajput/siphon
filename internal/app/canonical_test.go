@@ -358,3 +358,50 @@ func TestSchemaHeader_RoundTrip(t *testing.T) {
 		t.Errorf("schema fields lost in round-trip: %+v", got)
 	}
 }
+
+// --- normalizeScanned ------------------------------------------------------
+
+// TestNormalizeScanned_BytesBecomeString proves a []byte value scanned from
+// database/sql is converted to a string so it marshals as a JSON string and
+// round-trips intact, rather than base64-encoding (which would corrupt the
+// value before ConsumeCanonical re-inserts it).
+func TestNormalizeScanned_BytesBecomeString(t *testing.T) {
+	in := []byte("hello-world")
+	got := normalizeScanned(in)
+	s, ok := got.(string)
+	if !ok {
+		t.Fatalf("normalizeScanned([]byte) returned %T; want string", got)
+	}
+	if s != "hello-world" {
+		t.Fatalf("normalizeScanned = %q; want %q", s, "hello-world")
+	}
+
+	// Round-trip through the row marshal: a []byte value must come back as the
+	// original text, NOT base64.
+	row := CanonicalRow{Table: "t", Values: map[string]any{"c": normalizeScanned([]byte("café"))}}
+	b, err := json.Marshal(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "Y2Fmw") { // base64 prefix of "café" would leak in
+		t.Fatalf("[]byte was base64-encoded, not stringified: %s", b)
+	}
+	var back CanonicalRow
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Values["c"] != "café" {
+		t.Fatalf("round-trip = %v; want %q", back.Values["c"], "café")
+	}
+}
+
+// TestNormalizeScanned_NonBytesUnchanged confirms non-[]byte values pass
+// through untouched.
+func TestNormalizeScanned_NonBytesUnchanged(t *testing.T) {
+	if got := normalizeScanned(int64(42)); got != int64(42) {
+		t.Fatalf("normalizeScanned(int64) = %v; want 42", got)
+	}
+	if got := normalizeScanned(nil); got != nil {
+		t.Fatalf("normalizeScanned(nil) = %v; want nil", got)
+	}
+}
