@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/oklog/ulid/v2"
 
@@ -28,7 +29,10 @@ type IncrementalBaseInfo struct {
 // start LSN. Call this immediately before taking a base backup; the slot
 // prevents the server from recycling WAL the future incremental will need.
 func (c *Conn) CreateBaseSlot(ctx context.Context) (*IncrementalBaseInfo, error) {
-	slot := "siphon_" + ulid.Make().String()
+	// Postgres replication slot names allow only [a-z0-9_]; ULIDs are Crockford
+	// base32 (uppercase), so lowercase it or pg_create_physical_replication_slot
+	// rejects the name with SQLSTATE 42602 ("contains invalid character").
+	slot := "siphon_" + strings.ToLower(ulid.Make().String())
 	// temporary=false so the slot survives this session (the incremental runs
 	// in a later session); we drop it explicitly via DropSlot.
 	if _, err := c.db.ExecContext(ctx,
