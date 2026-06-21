@@ -44,6 +44,6 @@ func newSyncCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&stream, "stream", true, "Stream source→target without intermediate file")
 	cmd.Flags().StringSliceVar(&tables, "table", nil, "Limit to these tables")
 	cmd.Flags().BoolVar(&crossEngine, "cross-engine", false, "Translate between engines via canonical schema (requires cross-engine driver support; not yet available)")
-	cmd.Flags().BoolVar(&continuous, "continuous", false, "Continuously follow source changes (CDC); use `siphon cdc` (Phase F Task 10)")
+	cmd.Flags().BoolVar(&continuous, "continuous", false, "Continuously follow source changes (CDC) — not yet available; see docs/CDC.md")
 	return cmd
 }

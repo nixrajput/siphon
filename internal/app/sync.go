@@ -17,8 +17,8 @@ type SyncOpts struct {
 	// CrossEngine routes through the canonical-schema path (e.g. postgres→mysql)
 	// instead of the native homogeneous stream. Gated on driver capability.
 	CrossEngine bool
-	// Continuous requests CDC follow mode. Not wired here — see `siphon cdc`
-	// (Phase F Task 10). Setting it returns a clear CodeUser error.
+	// Continuous requests CDC follow mode. Not yet available (Phase F ships CDC
+	// as an internal scaffold only). Setting it returns a clear CodeUser error.
 	Continuous bool
 }
 
@@ -37,7 +37,7 @@ func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, stri
 			Op:    "sync.continuous",
 			Code:  errs.CodeUser,
 			Cause: errs.ErrDriverUnsupported,
-			Hint:  "continuous CDC sync is not wired here; use `siphon cdc` (Phase F Task 10)",
+			Hint:  "continuous CDC sync is not yet available (Phase F follow-up); see docs/CDC.md",
 		}
 	}
 
