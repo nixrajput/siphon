@@ -11,17 +11,19 @@ lint: ## Run golangci-lint
 
 # NOTE: `go test ./...` skips directories whose names start with `_` (Go tool
 # convention), so underscore-prefixed packages with real tests (e.g.
-# internal/driver/_mysqlcommon) are silently excluded. Name them explicitly via
-# the `_*` glob so their unit tests actually run. The glob auto-picks up any
-# future _*-prefixed package under internal/driver/.
+# internal/driver/_mysqlcommon) are silently excluded. Name them explicitly by
+# import path so their unit tests run. Use the import path (not a `_*` shell
+# glob) so this is identical to what CI runs and works regardless of shell.
+UNDERSCORE_PKGS := github.com/nixrajput/siphon/internal/driver/_mysqlcommon
+
 test: ## Run unit tests
-	go test ./... ./internal/driver/_*/
+	go test ./... $(UNDERSCORE_PKGS)
 
 test-verbose: ## Run unit tests verbosely
-	go test -v ./... ./internal/driver/_*/
+	go test -v ./... $(UNDERSCORE_PKGS)
 
 test-integration: ## Run integration tests (build tag: integration)
-	go test -tags=integration ./... ./internal/driver/_*/
+	go test -tags=integration ./... $(UNDERSCORE_PKGS)
 
 build: ## Build the siphon binary into ./bin
 	@mkdir -p bin
