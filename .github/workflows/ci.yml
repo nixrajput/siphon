@@ -40,3 +40,23 @@ jobs:
         run: go vet ./...
       - name: go test
         run: go test ./...
+      # Integration tests use testcontainers, which needs a Docker daemon.
+      # Only ubuntu-latest runners have Docker available by default, so the
+      # DB client install and integration suite are scoped to Ubuntu.
+      # macOS/Windows run unit tests only (the integration-tagged files that
+      # shell out to the client binaries are tagged out of the unit build).
+      - name: Install DB client tools (integration, Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          # postgresql-client -> pg_dump/pg_restore
+          # mysql-client      -> mysqldump/mysql
+          # mariadb-client    -> mariadb-dump/mariadb
+          # NOTE: mysql-client and mariadb-client can conflict on some Ubuntu
+          # releases (both provide the mysql* binaries via alternatives). If apt
+          # reports a conflict in CI, split them or drop mysql-client (mariadb-client
+          # provides mysql-compatible binaries) as a one-line follow-up.
+          sudo apt-get install -y postgresql-client mysql-client mariadb-client
+      - name: Integration tests (Ubuntu only — needs Docker)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -tags=integration ./...
