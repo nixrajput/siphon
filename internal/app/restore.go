@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/nixrajput/siphon/internal/driver"
+	"github.com/nixrajput/siphon/internal/dumps"
 	"github.com/nixrajput/siphon/internal/jobs"
 )
 
@@ -44,6 +45,11 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 			}
 			defer func() { _ = f.Close() }()
 
+			_, body, err := dumps.ReadEnvelope(f)
+			if err != nil {
+				return err
+			}
+
 			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "restoring " + opt.DumpID})
 
 			return conn.Restore(ctx, driver.RestoreOpts{
@@ -51,7 +57,7 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 				SchemaOnly:   opt.SchemaOnly,
 				DataOnly:     opt.DataOnly,
 				Clean:        opt.Clean,
-			}, f)
+			}, body)
 		},
 	})
 }
