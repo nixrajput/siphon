@@ -55,6 +55,50 @@ func TestBuildDumpArgs_Tables(t *testing.T) {
 	}
 }
 
+func TestBuildDumpArgs_DataOnly(t *testing.T) {
+	p := driver.Profile{Host: "db.local", Port: 3306, User: "root", Database: "shop"}
+	got := BuildDumpArgs(p, driver.BackupOpts{DataOnly: true})
+	want := []string{
+		"-h", "db.local",
+		"-P", "3306",
+		"-u", "root",
+		"--single-transaction",
+		"--routines",
+		"--triggers",
+		"--events",
+		"--no-tablespaces",
+		"--skip-comments",
+		"shop",
+		"--no-create-info",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildDumpArgs() = %v\nwant %v", got, want)
+	}
+}
+
+func TestBuildDumpArgs_MultiExclude(t *testing.T) {
+	p := driver.Profile{Host: "db.local", Port: 3306, User: "root", Database: "shop"}
+	opt := driver.BackupOpts{ExcludeTables: []string{"sessions", "cache"}}
+	got := BuildDumpArgs(p, opt)
+	want := []string{
+		"-h", "db.local",
+		"-P", "3306",
+		"-u", "root",
+		"--single-transaction",
+		"--routines",
+		"--triggers",
+		"--events",
+		"--no-tablespaces",
+		"--skip-comments",
+		"shop",
+		"--ignore-table=shop.sessions",
+		"--ignore-table=shop.cache",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildDumpArgs() = %v\nwant %v", got, want)
+	}
+}
+
 func TestDSN(t *testing.T) {
 	p := driver.Profile{Host: "db.local", Port: 3306, User: "root", Password: "pw", Database: "shop"}
 	got := DSN(p)
