@@ -13,6 +13,7 @@ func BuildDumpArgs(p driver.Profile, opt driver.BackupOpts) []string {
 		"-h", p.Host,
 		"-P", strconv.Itoa(p.Port),
 		"-u", p.User,
+		"--ssl-mode=" + cliSSLMode(p.SSLMode),
 		"--single-transaction",
 		"--routines",
 		"--triggers",
@@ -43,7 +44,27 @@ func BuildRestoreArgs(p driver.Profile, _ driver.RestoreOpts) []string {
 		"-h", p.Host,
 		"-P", strconv.Itoa(p.Port),
 		"-u", p.User,
+		"--ssl-mode=" + cliSSLMode(p.SSLMode),
 		"--default-character-set=utf8mb4",
 		p.Database,
+	}
+}
+
+// cliSSLMode maps a profile SSLMode to the mysqldump/mysql client's
+// --ssl-mode value, so backup/restore honor the same TLS policy the DSN does
+// (otherwise the tools fall back to the client default, PREFERRED). The inputs
+// mirror tlsParam in dsn.go.
+func cliSSLMode(mode string) string {
+	switch mode {
+	case "disable":
+		return "DISABLED"
+	case "require":
+		return "REQUIRED"
+	case "verify-ca":
+		return "VERIFY_CA"
+	case "verify-full":
+		return "VERIFY_IDENTITY"
+	default:
+		return "PREFERRED"
 	}
 }

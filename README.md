@@ -39,7 +39,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ## Why siphon
 
 - **One CLI, many databases.** Postgres, MySQL, and MariaDB all work today (MySQL and MariaDB share a common `_mysqlcommon` backend). The driver interface is engine-agnostic, so SQLite, MongoDB, SQL Server, and ClickHouse can follow.
-- **Native, not reimplemented.** siphon shells out to `pg_dump`/`pg_restore` (and `mysqldump`/`mariadb-dump` in v1.0) for the actual data movement — you inherit 20+ years of correctness from the official tools, wrapped in a consistent UX.
+- **Native, not reimplemented.** siphon shells out to `pg_dump`/`pg_restore`, `mysqldump`/`mysql`, and `mariadb-dump`/`mariadb` for the actual data movement — you inherit 20+ years of correctness from the official tools, wrapped in a consistent UX.
 - **Integrity by default.** Every dump is checksummed (SHA-256) and recorded in a sidecar metadata file. `siphon verify` re-hashes the dump and flags corruption or tampering — and fails with a distinct exit code so CI can catch it.
 - **Built for scripts and humans.** A Cobra command tree with predictable flags and POSIX exit codes for automation; an interactive Bubble Tea dashboard when you invoke `siphon` bare.
 - **Named profiles + secret refs.** Store connection details once; reference secrets as `env:VAR` today, with OS keychain / Vault / 1Password / AWS Secrets Manager backends on the roadmap. Plaintext passwords never have to live in your config.

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/nixrajput/siphon/internal/driver"
@@ -126,7 +127,7 @@ func (c *Conn) Verify(_ context.Context, r io.Reader) (*driver.VerifyReport, err
 // streams its stdout to w. ctx cancellation propagates via exec.CommandContext.
 func BackupWith(ctx context.Context, binary string, p driver.Profile, opt driver.BackupOpts, w io.Writer) error {
 	cmd := exec.CommandContext(ctx, binary, BuildDumpArgs(p, opt)...)
-	cmd.Env = append(os.Environ(), "MYSQL_PWD="+p.Password)
+	cmd.Env = withMySQLPwd(os.Environ(), p.Password)
 	cmd.Stdout = w
 	// Discard stderr directly. StderrPipe + a drain goroutine would race with
 	// cmd.Wait() (Wait closes the pipe once the process exits). Phase F will
@@ -144,7 +145,7 @@ func BackupWith(ctx context.Context, binary string, p driver.Profile, opt driver
 // into its stdin. ctx cancellation propagates via exec.CommandContext.
 func RestoreWith(ctx context.Context, binary string, p driver.Profile, opt driver.RestoreOpts, r io.Reader) error {
 	cmd := exec.CommandContext(ctx, binary, BuildRestoreArgs(p, opt)...)
-	cmd.Env = append(os.Environ(), "MYSQL_PWD="+p.Password)
+	cmd.Env = withMySQLPwd(os.Environ(), p.Password)
 	cmd.Stdin = r
 	cmd.Stderr = io.Discard // don't leak client diagnostics to the user's terminal; Phase F captures these
 
@@ -167,4 +168,19 @@ func toolErr(binary, op string, err error) *errs.Error {
 		}
 	}
 	return &errs.Error{Op: op, Code: errs.CodeSystem, Cause: err}
+}
+
+// withMySQLPwd returns base with any pre-existing MYSQL_PWD entry removed and a
+// single MYSQL_PWD=pw appended. Without the filter, a MYSQL_PWD already in the
+// parent environment would remain alongside ours; the tool's behavior on a
+// duplicated key is unspecified, so we guarantee exactly one.
+func withMySQLPwd(base []string, pw string) []string {
+	out := make([]string, 0, len(base)+1)
+	for _, kv := range base {
+		if strings.HasPrefix(kv, "MYSQL_PWD=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "MYSQL_PWD="+pw)
 }

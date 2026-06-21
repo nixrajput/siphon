@@ -7,19 +7,28 @@ package mysqlcommon
 import (
 	"fmt"
 
+	gomysql "github.com/go-sql-driver/mysql"
+
 	"github.com/nixrajput/siphon/internal/driver"
 )
 
-// DSN builds a go-sql-driver/mysql connection string:
-// user:pass@tcp(host:port)/db?parseTime=true&tls=<mode>
-//
-// This trusts p.User to be free of ':' — the go-sql-driver DSN format splits
-// user:pass on the first ':', so passwords need no escaping (the library
-// tolerates them), but a ':' in the username would corrupt parsing. MySQL
-// usernames don't contain ':' in practice.
+// DSN builds a go-sql-driver/mysql connection string via mysql.Config.FormatDSN,
+// the driver's own canonical builder, rather than hand-formatting. FormatDSN
+// path-escapes the DBName and round-trips with the driver's ParseDSN, so we
+// stay aligned with whatever the library considers valid. (Note: it does not
+// percent-encode the user/password — those still rely on positional parsing —
+// so a ':' in the username remains unsupported; MySQL usernames don't contain
+// one in practice.)
 func DSN(p driver.Profile) string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&tls=%s",
-		p.User, p.Password, p.Host, p.Port, p.Database, tlsParam(p.SSLMode))
+	cfg := gomysql.NewConfig()
+	cfg.User = p.User
+	cfg.Passwd = p.Password
+	cfg.Net = "tcp"
+	cfg.Addr = fmt.Sprintf("%s:%d", p.Host, p.Port)
+	cfg.DBName = p.Database
+	cfg.ParseTime = true
+	cfg.TLSConfig = tlsParam(p.SSLMode)
+	return cfg.FormatDSN()
 }
 
 func tlsParam(mode string) string {
