@@ -64,7 +64,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 - **Database client tools** — siphon shells out to the native dump/restore tools; it does not embed a client. You only need the tools for the engines you actually use:
   - **PostgreSQL** profiles need `pg_dump`, `pg_restore`, `psql`.
   - **MySQL** profiles need `mysqldump`, `mysql`.
-  - **MariaDB** profiles need `mariadb-dump`, `mariadb`.
+  - **MariaDB** profiles need `mariadb-dump`, `mariadb` (the renamed binaries shipped by MariaDB 10.5+; older installs that only ship `mysqldump`/`mysql` are not yet supported).
 
   | Platform      | PostgreSQL                                                                                                      | MySQL / MariaDB                                       |
   | ------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |

@@ -9,14 +9,19 @@ help: ## Show this help
 lint: ## Run golangci-lint
 	golangci-lint run
 
+# NOTE: `go test ./...` skips directories whose names start with `_` (Go tool
+# convention), so underscore-prefixed packages with real tests (e.g.
+# internal/driver/_mysqlcommon) are silently excluded. Name them explicitly via
+# the `_*` glob so their unit tests actually run. The glob auto-picks up any
+# future _*-prefixed package under internal/driver/.
 test: ## Run unit tests
-	go test ./...
+	go test ./... ./internal/driver/_*/
 
 test-verbose: ## Run unit tests verbosely
-	go test -v ./...
+	go test -v ./... ./internal/driver/_*/
 
 test-integration: ## Run integration tests (build tag: integration)
-	go test -tags=integration ./...
+	go test -tags=integration ./... ./internal/driver/_*/
 
 build: ## Build the siphon binary into ./bin
 	@mkdir -p bin

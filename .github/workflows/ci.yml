@@ -38,8 +38,10 @@ jobs:
           cache: true
       - name: go vet
         run: go vet ./...
+      # `./...` skips underscore-prefixed dirs, so name _*-prefixed packages
+      # explicitly (e.g. internal/driver/_mysqlcommon) to run their unit tests.
       - name: go test
-        run: go test ./...
+        run: go test ./... ./internal/driver/_*/
       # Integration tests use testcontainers, which needs a Docker daemon.
       # Only ubuntu-latest runners have Docker available by default, so the
       # DB client install and integration suite are scoped to Ubuntu.
@@ -59,4 +61,4 @@ jobs:
           sudo apt-get install -y postgresql-client mysql-client mariadb-client
       - name: Integration tests (Ubuntu only — needs Docker)
         if: matrix.os == 'ubuntu-latest'
-        run: go test -tags=integration ./...
+        run: go test -tags=integration ./... ./internal/driver/_*/
