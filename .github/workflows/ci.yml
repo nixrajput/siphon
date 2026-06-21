@@ -38,5 +38,28 @@ jobs:
           cache: true
       - name: go vet
         run: go vet ./...
+      # `./...` skips underscore-prefixed dirs, so name the _mysqlcommon package
+      # explicitly by import path to run its unit tests. Use the import path (not
+      # a `_*` shell glob) so it works on PowerShell (Windows) as well as bash.
       - name: go test
-        run: go test ./...
+        run: go test ./... github.com/nixrajput/siphon/internal/driver/_mysqlcommon
+      # Integration tests use testcontainers, which needs a Docker daemon.
+      # Only ubuntu-latest runners have Docker available by default, so the
+      # DB client install and integration suite are scoped to Ubuntu.
+      # macOS/Windows run unit tests only (the integration-tagged files that
+      # shell out to the client binaries are tagged out of the unit build).
+      - name: Install DB client tools (integration, Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          # postgresql-client -> pg_dump/pg_restore ; mysql-client -> mysqldump/mysql
+          sudo apt-get install -y postgresql-client mysql-client
+          # Ubuntu's mariadb-client Conflicts with mysql-client-core, so it can't
+          # co-install. Pull mariadb-dump/mariadb from MariaDB's official APT repo
+          # (the repo's mariadb-client is built to coexist with MySQL's client).
+          curl -fsSL https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client
+      - name: Integration tests (Ubuntu only — needs Docker)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -tags=integration ./... github.com/nixrajput/siphon/internal/driver/_mysqlcommon

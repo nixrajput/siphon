@@ -216,6 +216,12 @@ The `Fixtures` struct (in `internal/driver/_testing/fixtures.go`) you populate:
 
 The worked example is `internal/driver/postgres/integration_test.go` — copy its
 shape. The suite runs behind the `integration` build tag (`make test-integration`).
+`internal/driver/mysql/` and `internal/driver/mariadb/` are a second worked example:
+two engines that share almost everything live in `internal/driver/_mysqlcommon/`
+(a shared `Conn` plus arg/DSN builders), leaving each driver a ~30-line wrapper
+that only injects the fork-specific binary names and capabilities. If you're
+adding an engine that's a fork of an existing one, follow that shared-helper
+pattern rather than copying a whole driver.
 
 ## Error mapping
 

@@ -2,6 +2,8 @@ package app
 
 import (
 	"github.com/nixrajput/siphon/internal/driver"
+	_ "github.com/nixrajput/siphon/internal/driver/mariadb"  // register the mariadb driver
+	_ "github.com/nixrajput/siphon/internal/driver/mysql"    // register the mysql driver
 	_ "github.com/nixrajput/siphon/internal/driver/postgres" // register the postgres driver
 )
 
