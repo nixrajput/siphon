@@ -28,7 +28,7 @@ func (Driver) Capabilities() driver.Capabilities {
 		BinaryFormat:       false, // SQL text dump, not a binary archive
 		CrossEngineSource:  true,
 		CrossEngineTarget:  true,
-		CDC:                false, // Phase F
+		CDC:                true,
 		NativeBackpressure: true,
 		// CrossVersionIncremental defaults false
 	}

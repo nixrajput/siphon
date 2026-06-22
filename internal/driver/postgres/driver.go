@@ -34,7 +34,7 @@ func (Driver) Capabilities() driver.Capabilities {
 		BinaryFormat:       true,
 		CrossEngineSource:  true,
 		CrossEngineTarget:  true,
-		CDC:                false, // Phase F
+		CDC:                true,
 		NativeBackpressure: true,
 	}
 }
