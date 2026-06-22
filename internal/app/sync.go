@@ -29,8 +29,8 @@ type SyncOpts struct {
 // preventing a truncated dump from being committed as if clean.
 //
 // When opt.CrossEngine is set the work routes through runCrossEngineSync, which
-// is capability-gated and today returns a clear unsupported error (no driver
-// declares cross-engine source/target yet).
+// is capability-gated and uses driver.SchemaInspector + driver.CanonicalTransfer
+// for typed cross-engine snapshot transfer.
 func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, string, error) {
 	if opt.Continuous {
 		return nil, "", &errs.Error{
@@ -107,19 +107,10 @@ func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, stri
 }
 
 // runCrossEngineSync handles heterogeneous sync (e.g. postgres→mysql) by routing
-// through the canonical-schema machinery (driver EmitCanonical/ConsumeCanonical).
-//
-// It is HONESTLY gated: it checks CapCrossEngineSource on the source driver and
-// CapCrossEngineTarget on the target. No driver declares either today (all
-// return false — see each driver.go), because cross-engine translation needs a
-// typed CanonicalSchema and driver.Inspect carries no column types yet. So the
-// capability gate rejects every cross-engine request with ErrDriverUnsupported.
-//
-// This is deliberate scaffolding: the canonical emit/consume machinery (Task 8)
-// exists and is unit-tested, but wiring it requires typed schema introspection
-// (a future task). We do NOT fabricate a CanonicalSchema here. Once Inspect
-// emits column types and a driver flips its cross-engine caps to true, this
-// function gains the real emit→translate→consume pipeline.
+// through the canonical-schema machinery: InspectSchema on the source builds a
+// CanonicalSchema, EmitCanonical streams it as JSONL through a jobs.Stream, and
+// ConsumeCanonical on the target replays the rows. Both ends must implement
+// driver.SchemaInspector and driver.CanonicalTransfer.
 func runCrossEngineSync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, string, error) {
 	if err := RequireCapability(d, opt.From, CapCrossEngineSource); err != nil {
 		return nil, "", err
@@ -127,13 +118,89 @@ func runCrossEngineSync(parent context.Context, d Deps, opt SyncOpts) (<-chan jo
 	if err := RequireCapability(d, opt.To, CapCrossEngineTarget); err != nil {
 		return nil, "", err
 	}
-	// Unreachable today (no driver advertises cross-engine caps), but kept as a
-	// clear, honest backstop should a cap ever flip true before the pipeline is
-	// actually wired.
-	return nil, "", &errs.Error{
-		Op:    "sync.cross_engine",
-		Code:  errs.CodeUser,
-		Cause: errs.ErrDriverUnsupported,
-		Hint:  "cross-engine sync requires typed schema introspection, not yet available",
+
+	src, err := d.Profiles.Resolve(opt.From)
+	if err != nil {
+		return nil, "", err
 	}
+	dst, err := d.Profiles.Resolve(opt.To)
+	if err != nil {
+		return nil, "", err
+	}
+	srcDrv, err := d.Drivers.Get(src.Driver)
+	if err != nil {
+		return nil, "", err
+	}
+	dstDrv, err := d.Drivers.Get(dst.Driver)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return d.Runner.Run(parent, jobs.Job{
+		Stage: "sync.cross-engine",
+		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+			srcConn, err := srcDrv.Connect(ctx, src)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = srcConn.Close() }()
+
+			dstConn, err := dstDrv.Connect(ctx, dst)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = dstConn.Close() }()
+
+			srcInsp, ok := srcConn.(driver.SchemaInspector)
+			if !ok {
+				return &errs.Error{
+					Op:    "sync.cross_engine",
+					Code:  errs.CodeUser,
+					Cause: errs.ErrDriverUnsupported,
+					Hint:  src.Driver + " driver does not implement SchemaInspector",
+				}
+			}
+			srcXfer, ok := srcConn.(driver.CanonicalTransfer)
+			if !ok {
+				return &errs.Error{
+					Op:    "sync.cross_engine",
+					Code:  errs.CodeUser,
+					Cause: errs.ErrDriverUnsupported,
+					Hint:  src.Driver + " driver does not implement CanonicalTransfer",
+				}
+			}
+			dstXfer, ok := dstConn.(driver.CanonicalTransfer)
+			if !ok {
+				return &errs.Error{
+					Op:    "sync.cross_engine",
+					Code:  errs.CodeUser,
+					Cause: errs.ErrDriverUnsupported,
+					Hint:  dst.Driver + " driver does not implement CanonicalTransfer",
+				}
+			}
+
+			schema, err := srcInsp.InspectSchema(ctx)
+			if err != nil {
+				return err
+			}
+
+			stream := jobs.NewStream(64)
+			errCh := make(chan error, 1)
+
+			go func() {
+				emitErr := srcXfer.EmitCanonical(ctx, schema, stream)
+				_ = stream.CloseErr(emitErr)
+				errCh <- emitErr
+			}()
+
+			consumeErr := dstXfer.ConsumeCanonical(ctx, stream)
+			_ = stream.Close()
+			emitErr := <-errCh
+
+			if emitErr != nil {
+				return emitErr
+			}
+			return consumeErr
+		},
+	})
 }

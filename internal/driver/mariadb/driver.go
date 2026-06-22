@@ -26,8 +26,8 @@ func (Driver) Capabilities() driver.Capabilities {
 		Parallel:           false, // mariadb-dump is single-threaded
 		Compression:        true,
 		BinaryFormat:       false, // SQL text dump, not a binary archive
-		CrossEngineSource:  false, // Phase F
-		CrossEngineTarget:  false, // Phase F
+		CrossEngineSource:  true,
+		CrossEngineTarget:  true,
 		CDC:                false, // Phase F
 		NativeBackpressure: true,
 		// CrossVersionIncremental defaults false
@@ -35,7 +35,7 @@ func (Driver) Capabilities() driver.Capabilities {
 }
 
 func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error) {
-	return mysqlcommon.NewConn(ctx, p, "mariadb-dump", "mariadb", "mariadb-binlog", "mariadb.connect")
+	return mysqlcommon.NewConn(ctx, p, "mariadb-dump", "mariadb", "mariadb-binlog", "mariadb.connect", "mariadb")
 }
 
 // Compile-time check.

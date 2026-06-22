@@ -32,8 +32,8 @@ func (Driver) Capabilities() driver.Capabilities {
 		Parallel:           true, // capability exists in the engine, but not wired in Phase B: pg_dump -j needs -Fd (see backup.go) and RestoreOpts carries no Parallel field yet — both land in a later phase
 		Compression:        true,
 		BinaryFormat:       true,
-		CrossEngineSource:  false, // Phase F
-		CrossEngineTarget:  false, // Phase F
+		CrossEngineSource:  true,
+		CrossEngineTarget:  true,
 		CDC:                false, // Phase F
 		NativeBackpressure: true,
 	}

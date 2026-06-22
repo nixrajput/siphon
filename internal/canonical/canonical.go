@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -293,6 +294,34 @@ func BuildInsertSQL(engine, table string, cols []string) (string, error) {
 	}
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		qt, strings.Join(qcols, ","), strings.Join(phs, ",")), nil
+}
+
+// ChangeColumns returns the SET columns (Values minus Key, sorted) and the Key
+// columns (sorted), giving deterministic statement shape and argument order.
+func ChangeColumns(ch CanonicalChange) (setCols, keyCols []string) {
+	for k := range ch.Key {
+		keyCols = append(keyCols, k)
+	}
+	sort.Strings(keyCols)
+	keySet := make(map[string]bool, len(keyCols))
+	for _, k := range keyCols {
+		keySet[k] = true
+	}
+	for c := range ch.Values {
+		if !keySet[c] {
+			setCols = append(setCols, c)
+		}
+	}
+	sort.Strings(setCols)
+	return setCols, keyCols
+}
+
+// ValidateChangeKey returns an error if ch.Op is Update or Delete and ch.Key is empty.
+func ValidateChangeKey(ch CanonicalChange) error {
+	if (ch.Op == OpUpdate || ch.Op == OpDelete) && len(ch.Key) == 0 {
+		return fmt.Errorf("change on %s has no primary key", ch.Table)
+	}
+	return nil
 }
 
 // WriteJSONL marshals v and writes it followed by a newline.

@@ -525,3 +525,67 @@ func TestBuildCreateTableSQL_WithPrimaryKey(t *testing.T) {
 		t.Fatalf("missing PK clause: %s", got)
 	}
 }
+
+// --- ChangeColumns -----------------------------------------------------------
+
+func TestChangeColumns_Basic(t *testing.T) {
+	ch := CanonicalChange{
+		Op:     OpUpdate,
+		Table:  "t",
+		Key:    map[string]any{"id": 1},
+		Values: map[string]any{"id": 1, "name": "x"},
+	}
+	set, key := ChangeColumns(ch)
+	if len(key) != 1 || key[0] != "id" {
+		t.Fatalf("key cols = %v want [id]", key)
+	}
+	if len(set) != 1 || set[0] != "name" {
+		t.Fatalf("set cols = %v want [name]", set)
+	}
+}
+
+func TestChangeColumns_MultipleKeyAndSet(t *testing.T) {
+	ch := CanonicalChange{
+		Op:     OpUpdate,
+		Table:  "t",
+		Key:    map[string]any{"b": 2, "a": 1},
+		Values: map[string]any{"a": 1, "b": 2, "z": "v", "m": "w"},
+	}
+	set, key := ChangeColumns(ch)
+	if len(key) != 2 || key[0] != "a" || key[1] != "b" {
+		t.Fatalf("key cols = %v want [a b]", key)
+	}
+	if len(set) != 2 || set[0] != "m" || set[1] != "z" {
+		t.Fatalf("set cols = %v want [m z]", set)
+	}
+}
+
+// --- ValidateChangeKey -------------------------------------------------------
+
+func TestValidateChangeKey_InsertNoKey_OK(t *testing.T) {
+	ch := CanonicalChange{Op: OpInsert, Table: "t"}
+	if err := ValidateChangeKey(ch); err != nil {
+		t.Fatalf("INSERT with no key: got %v want nil", err)
+	}
+}
+
+func TestValidateChangeKey_UpdateNoKey_Error(t *testing.T) {
+	ch := CanonicalChange{Op: OpUpdate, Table: "orders"}
+	if err := ValidateChangeKey(ch); err == nil {
+		t.Fatal("UPDATE with no key: want error, got nil")
+	}
+}
+
+func TestValidateChangeKey_DeleteNoKey_Error(t *testing.T) {
+	ch := CanonicalChange{Op: OpDelete, Table: "orders"}
+	if err := ValidateChangeKey(ch); err == nil {
+		t.Fatal("DELETE with no key: want error, got nil")
+	}
+}
+
+func TestValidateChangeKey_UpdateWithKey_OK(t *testing.T) {
+	ch := CanonicalChange{Op: OpUpdate, Table: "t", Key: map[string]any{"id": 1}}
+	if err := ValidateChangeKey(ch); err != nil {
+		t.Fatalf("UPDATE with key: got %v want nil", err)
+	}
+}

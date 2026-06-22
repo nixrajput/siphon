@@ -6,6 +6,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/nixrajput/siphon/internal/canonical"
 )
 
 // Driver is the protocol-level abstraction for a database engine.
@@ -26,6 +28,20 @@ type Conn interface {
 	Restore(ctx context.Context, opt RestoreOpts, r io.Reader) error
 	Verify(ctx context.Context, r io.Reader) (*VerifyReport, error)
 	Close() error
+}
+
+// SchemaInspector is an optional interface a Conn may implement to expose typed
+// schema information for cross-engine transfers.
+type SchemaInspector interface {
+	InspectSchema(ctx context.Context) (*canonical.CanonicalSchema, error)
+}
+
+// CanonicalTransfer is an optional interface a Conn may implement to support
+// cross-engine data transfer via the canonical JSONL format.
+type CanonicalTransfer interface {
+	EmitCanonical(ctx context.Context, schema *canonical.CanonicalSchema, w io.Writer) error
+	ConsumeCanonical(ctx context.Context, r io.Reader) error
+	ApplyChange(ctx context.Context, ch canonical.CanonicalChange) error
 }
 
 // Capabilities describes what an engine supports. Each flag gates a UI
