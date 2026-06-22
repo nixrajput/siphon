@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	tc "github.com/testcontainers/testcontainers-go"
 	mysqlctr "github.com/testcontainers/testcontainers-go/modules/mysql"
 	pgctr "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	mysqlcommon "github.com/nixrajput/siphon/internal/driver/_mysqlcommon"
 
@@ -56,10 +58,20 @@ func startIntegPG(t *testing.T) (host string, port int, cleanup func()) {
 func startIntegMySQL(t *testing.T) (host string, port int, cleanup func()) {
 	t.Helper()
 	ctx := context.Background()
+	// Explicit, generous startup wait: this test boots Postgres + MySQL in one
+	// run alongside the per-driver suites, so under concurrent cold-image pulls
+	// MySQL's two-phase init (init → restart → second "ready for connections")
+	// can exceed the module's default 60s timeout. Wait for that second ready
+	// log with a 180s ceiling so a slow-but-healthy boot is tolerated, not failed.
 	c, err := mysqlctr.Run(ctx, "mysql:8.0",
 		mysqlctr.WithDatabase("test"),
 		mysqlctr.WithUsername("root"),
 		mysqlctr.WithPassword("rootpass"),
+		tc.WithWaitStrategy(
+			wait.ForLog("port: 3306  MySQL Community Server").
+				WithOccurrence(1).
+				WithStartupTimeout(180*time.Second),
+		),
 	)
 	if err != nil {
 		t.Fatalf("start mysql container: %v", err)

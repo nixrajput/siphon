@@ -72,14 +72,12 @@ func TestStreamChanges_Bounded(t *testing.T) {
 
 	conn := &Conn{db: db, p: prof}
 
-	// Capture the start LSN before any DML so the stream sees exactly our changes.
-	var startLSN string
-	if err := db.QueryRowContext(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&startLSN); err != nil {
-		t.Fatalf("capture lsn: %v", err)
-	}
-	// The publication+slot must exist before the DML so the slot retains the WAL.
-	if err := conn.ensurePublication(ctx); err != nil {
-		t.Fatalf("ensure publication: %v", err)
+	// Capture the start position before any DML so the stream sees exactly our
+	// changes. CurrentPosition also establishes the logical slot — a slot only
+	// retains WAL produced after its creation, so it must exist before the DML.
+	startPos, err := conn.CurrentPosition(ctx)
+	if err != nil {
+		t.Fatalf("capture start position: %v", err)
 	}
 
 	// Apply the three operations.
@@ -109,7 +107,7 @@ func TestStreamChanges_Bounded(t *testing.T) {
 		return nil
 	}
 
-	if _, err := conn.StreamChanges(streamCtx, canonical.Position{LSN: startLSN}, emit); err != nil {
+	if _, err := conn.StreamChanges(streamCtx, startPos, emit); err != nil {
 		t.Fatalf("StreamChanges: %v", err)
 	}
 

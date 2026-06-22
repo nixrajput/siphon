@@ -14,10 +14,28 @@ import (
 var _ driver.IncrementalBackuper = (*Conn)(nil)
 var _ driver.BasePositioner = (*Conn)(nil)
 
-// CurrentPosition returns the server's current WAL position via
-// pg_current_wal_lsn(). app.Backup calls this right after a full backup so the
-// base dump's Envelope records where the first incremental should resume from.
+// CurrentPosition records the resume anchor for the first incremental after a
+// base backup. app.Backup calls this right after a full backup so the base
+// dump's Envelope carries where the first incremental should resume from.
+//
+// It also ESTABLISHES the logical replication slot if it does not yet exist. A
+// logical slot only retains and decodes WAL produced after the slot's own
+// creation, so the slot must exist from the recorded anchor forward or the
+// first incremental silently captures nothing (it would resume from an LSN the
+// slot never retained). When this call creates the slot, the slot's consistent
+// point is the correct anchor — it is the exact LSN from which the slot
+// guarantees decodable WAL. When the slot already exists it is already
+// retaining WAL, so pg_current_wal_lsn() is a safe anchor.
 func (c *Conn) CurrentPosition(ctx context.Context) (canonical.Position, error) {
+	consistent, err := c.establishLogicalSlot(ctx)
+	if err != nil {
+		return canonical.Position{}, err
+	}
+	if consistent != "" {
+		// Slot freshly created: anchor to its consistent point, the boundary
+		// from which it retains every subsequent change.
+		return canonical.Position{LSN: consistent}, nil
+	}
 	var lsn string
 	if err := c.db.QueryRowContext(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&lsn); err != nil {
 		return canonical.Position{}, &errs.Error{Op: "postgres.current_position", Code: errs.CodeSystem, Cause: err}

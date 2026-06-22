@@ -67,7 +67,7 @@ func (c *Conn) streamWithStop(ctx context.Context, from canonical.Position, stop
 	}
 	defer func() { _ = repl.Close(context.Background()) }()
 
-	if err := ensureLogicalSlot(ctx, repl); err != nil {
+	if _, err := ensureLogicalSlot(ctx, repl); err != nil {
 		return canonical.Position{}, err
 	}
 
@@ -375,16 +375,50 @@ func (c *Conn) ensurePublication(ctx context.Context) error {
 // ensureLogicalSlot creates the pgoutput logical slot on the replication
 // connection if absent. CreateReplicationSlot errors with "already exists" when
 // the slot is present; that is tolerated so repeated streams reuse the slot.
-func ensureLogicalSlot(ctx context.Context, repl *pgconn.PgConn) error {
-	_, err := pglogrepl.CreateReplicationSlot(ctx, repl, siphonSlot, outputPlugin,
+//
+// It returns the slot's consistent point — the LSN from which the freshly
+// created slot guarantees every subsequent change is retained and decodable —
+// when it creates the slot, and "" when the slot already existed (the existing
+// slot is already retaining WAL, so the caller has no new anchor to record).
+func ensureLogicalSlot(ctx context.Context, repl *pgconn.PgConn) (string, error) {
+	res, err := pglogrepl.CreateReplicationSlot(ctx, repl, siphonSlot, outputPlugin,
 		pglogrepl.CreateReplicationSlotOptions{Temporary: false})
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			return nil
+			return "", nil
 		}
-		return &errs.Error{Op: "postgres.stream", Code: errs.CodeSystem, Cause: err}
+		return "", &errs.Error{Op: "postgres.stream", Code: errs.CodeSystem, Cause: err}
 	}
-	return nil
+	return res.ConsistentPoint, nil
+}
+
+// establishLogicalSlot opens a short-lived replication connection, ensures the
+// publication and logical slot exist, and returns the slot's consistent point
+// (empty when the slot already existed).
+//
+// This is the slot-establishment primitive used to anchor WAL retention BEFORE
+// a workload runs: a logical slot only retains and decodes WAL produced after
+// its own creation, so the slot must exist before the changes a later
+// incremental or CDC run wants to capture. CurrentPosition calls this so a base
+// backup leaves the slot in place, and the changes that follow are retained.
+func (c *Conn) establishLogicalSlot(ctx context.Context) (string, error) {
+	if err := c.requireLogicalWAL(ctx); err != nil {
+		return "", err
+	}
+	if err := c.ensurePublication(ctx); err != nil {
+		return "", err
+	}
+	repl, err := pgconn.Connect(ctx, c.replicationDSN())
+	if err != nil {
+		return "", &errs.Error{
+			Op:    "postgres.stream",
+			Code:  errs.CodeSystem,
+			Cause: errs.ErrConnectionFailed,
+			Hint:  "logical replication connect: " + err.Error(),
+		}
+	}
+	defer func() { _ = repl.Close(context.Background()) }()
+	return ensureLogicalSlot(ctx, repl)
 }
 
 // resolveStartLSN returns the LSN to start replication from. A non-empty

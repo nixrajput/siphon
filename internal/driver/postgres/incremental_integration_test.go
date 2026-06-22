@@ -46,15 +46,13 @@ func TestBackupIncremental_BoundedCaptureAndReplay(t *testing.T) {
 
 	conn := &Conn{db: db, p: prof}
 
-	// Publication + slot must exist before the DML so the slot retains the WAL.
-	if err := conn.ensurePublication(ctx); err != nil {
-		t.Fatalf("ensure publication: %v", err)
-	}
-
-	// Capture the base-end LSN: the incremental resumes from exactly here.
-	var baseEnd string
-	if err := db.QueryRowContext(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&baseEnd); err != nil {
-		t.Fatalf("capture base-end lsn: %v", err)
+	// Capture the base-end position: the incremental resumes from exactly here.
+	// CurrentPosition also establishes the logical slot — a slot only retains
+	// WAL produced after its creation, so it must exist before the post-base DML
+	// or the incremental captures nothing.
+	basePos, err := conn.CurrentPosition(ctx)
+	if err != nil {
+		t.Fatalf("capture base-end position: %v", err)
 	}
 
 	// Post-base changes: one insert, one update, one delete.
@@ -72,7 +70,7 @@ func TestBackupIncremental_BoundedCaptureAndReplay(t *testing.T) {
 	capCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	var buf bytes.Buffer
-	endPos, err := conn.BackupIncremental(capCtx, canonical.Position{LSN: baseEnd}, &buf)
+	endPos, err := conn.BackupIncremental(capCtx, basePos, &buf)
 	if err != nil {
 		t.Fatalf("BackupIncremental: %v", err)
 	}
