@@ -137,7 +137,7 @@ func (c *Conn) ApplyChange(ctx context.Context, ch canonical.CanonicalChange) er
 			cols = append(cols, col)
 		}
 		sort.Strings(cols)
-		stmt, err := canonical.BuildInsertSQL(c.engine, ch.Table, cols)
+		stmt, err := canonical.BuildIdempotentInsertSQL(c.engine, ch.Table, cols)
 		if err != nil {
 			return err
 		}

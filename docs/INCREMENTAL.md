@@ -36,6 +36,27 @@ WAL/binlog bytes. At restore time those changes are **replayed** via
 `ApplyChange` rather than fed to the native restore tool — base links restore
 natively, incremental links replay change records.
 
+### Where the first incremental resumes from
+
+`backup --incremental --base <id>` reads the base dump's envelope for its end
+position (`basePosition()` in `internal/app/backup.go`). For this to be correct
+when `--base` points at a **full** dump, that full backup must record where the
+engine's change stream stood as of the dump. Every full backup therefore captures
+the engine position immediately after the dump completes (via
+`driver.BasePositioner.CurrentPosition` — `pg_current_wal_lsn()` for Postgres,
+the current binlog file+offset for MySQL/MariaDB) and stamps it into the base
+envelope (`WALEnd` / `BinlogFile`+`BinlogEnd`). Without this, the first
+incremental off a full base would start from "now" and silently drop every change
+committed between the base dump and the incremental run.
+
+Capturing the position *after* the dump (rather than before) never under-captures:
+a consistent dump reflects the DB as of its snapshot, and the post-dump position
+is at-or-after that snapshot, so the incremental picks up every post-base change.
+The only edge is a change landing right at the boundary being captured in both the
+base and the incremental; incremental-replay INSERTs are therefore idempotent
+(`ON CONFLICT DO NOTHING` for Postgres, `INSERT IGNORE` for MySQL/MariaDB), so the
+re-apply is harmless.
+
 The driver-level capture (`driver.IncrementalBackuper`):
 
 - **Postgres** (`internal/driver/postgres/incremental_change.go`) captures the

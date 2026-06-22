@@ -245,6 +245,34 @@ func TestBuildInsertSQL_MySQL(t *testing.T) {
 	}
 }
 
+func TestBuildIdempotentInsertSQL_Postgres(t *testing.T) {
+	got, err := BuildIdempotentInsertSQL("postgres", "t", []string{"id", "name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `INSERT INTO "t" ("id","name") VALUES ($1,$2) ON CONFLICT DO NOTHING`
+	if got != want {
+		t.Errorf("postgres idempotent INSERT:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBuildIdempotentInsertSQL_MySQL(t *testing.T) {
+	got, err := BuildIdempotentInsertSQL("mysql", "t", []string{"id", "name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "INSERT IGNORE INTO `t` (`id`,`name`) VALUES (?,?)"
+	if got != want {
+		t.Errorf("mysql idempotent INSERT:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBuildIdempotentInsertSQL_UnknownEngine(t *testing.T) {
+	if _, err := BuildIdempotentInsertSQL("oracle", "t", []string{"id"}); err == nil {
+		t.Fatal("BuildIdempotentInsertSQL unknown engine: want error, got nil")
+	}
+}
+
 func TestBuildInsertSQL_EmptyColumns(t *testing.T) {
 	if _, err := BuildInsertSQL("postgres", "t", nil); err == nil {
 		t.Fatal("BuildInsertSQL with no columns: want error, got nil")

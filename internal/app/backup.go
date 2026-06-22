@@ -74,6 +74,69 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 				return runIncrementalBackup(ctx, d, opt, resolved, conn, emit)
 			}
 
+			// Stream the dump body to a temp file FIRST, then capture the
+			// engine's change-stream position, then assemble the final dump as
+			// envelope(position) + body — mirroring runIncrementalBackup.
+			//
+			// Why this ordering: a full base may later be used as `--base` for an
+			// incremental, whose `since` is read from this envelope. If the
+			// envelope carried no position, the first incremental would start
+			// from "now" and silently drop every change committed between the
+			// base dump and the incremental run. We therefore record a position.
+			//
+			// Consistent point — capture AFTER Backup returns: a consistent dump
+			// reflects the DB as of its snapshot; pg_current_wal_lsn() (binlog
+			// pos for MySQL/MariaDB) read just after the dump is at-or-after that
+			// snapshot, so the incremental captures every post-base change from
+			// there forward — no under-capture / no data loss. The only risk is a
+			// change landing right at the boundary being captured in BOTH base
+			// and incremental; ApplyChange's INSERT is idempotent (ON CONFLICT DO
+			// NOTHING / INSERT IGNORE) so such a re-apply is harmless. Capturing
+			// after (not before) the dump avoids the inverse hazard of streaming
+			// pre-snapshot inserts that would conflict on PK.
+			bodyTmp, err := os.CreateTemp(d.Dumps.Root(), "siphon-base-body-*")
+			if err != nil {
+				return err
+			}
+			bodyPath := bodyTmp.Name()
+			defer func() { _ = os.Remove(bodyPath) }()
+
+			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "dumping"})
+
+			backupErr := conn.Backup(ctx, driver.BackupOpts{
+				IncludeTables:    opt.IncludeTables,
+				ExcludeTables:    opt.ExcludeTables,
+				ExcludeDataFrom:  opt.ExcludeDataFrom,
+				SchemaOnly:       opt.SchemaOnly,
+				DataOnly:         opt.DataOnly,
+				CompressionLevel: opt.CompressionLevel,
+				Parallel:         opt.Parallel,
+			}, bodyTmp)
+
+			// Close the body file explicitly and check the error: for a file
+			// being WRITTEN, Close() is where buffered data is flushed and where
+			// late I/O failures (ENOSPC, quota, disk error) surface. The pg_dump
+			// error takes precedence if both occurred.
+			bodyCloseErr := bodyTmp.Close()
+			if backupErr != nil {
+				return backupErr
+			}
+			if bodyCloseErr != nil {
+				return &errs.Error{Op: "app.backup", Code: errs.CodeSystem, Cause: bodyCloseErr, Hint: "failed to flush dump to disk (out of space?)"}
+			}
+
+			// Capture the base position now (just after a consistent dump). Only
+			// drivers that support incremental implement BasePositioner; for the
+			// rest the envelope simply carries no position, as before.
+			var basePos canonical.Position
+			if bp, ok := conn.(driver.BasePositioner); ok {
+				pos, posErr := bp.CurrentPosition(ctx)
+				if posErr != nil {
+					return posErr
+				}
+				basePos = pos
+			}
+
 			id := ulid.Make().String()
 			tmpPath := filepath.Join(d.Dumps.Root(), id+".dump.tmp")
 			finalPath := d.Dumps.Path(id)
@@ -88,7 +151,12 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 			env := &dumps.Envelope{
 				Type:    dumps.EnvelopeBase,
 				Driver:  resolved.Driver,
+				WALEnd:  basePos.LSN,
 				Created: time.Now().UTC(),
+			}
+			if basePos.BinlogFile != "" {
+				env.BinlogFile = basePos.BinlogFile
+				env.BinlogEnd = basePos.BinlogPos
 			}
 			if _, err := dumps.WriteEnvelope(tee, env); err != nil {
 				_ = f.Close()
@@ -96,29 +164,21 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 				return err
 			}
 
-			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "dumping"})
-
-			backupErr := conn.Backup(ctx, driver.BackupOpts{
-				IncludeTables:    opt.IncludeTables,
-				ExcludeTables:    opt.ExcludeTables,
-				ExcludeDataFrom:  opt.ExcludeDataFrom,
-				SchemaOnly:       opt.SchemaOnly,
-				DataOnly:         opt.DataOnly,
-				CompressionLevel: opt.CompressionLevel,
-				Parallel:         opt.Parallel,
-			}, tee)
-
-			// Close the dump file explicitly and check the error: for a file
-			// being WRITTEN, Close() is where buffered data is flushed and where
-			// late I/O failures (ENOSPC, quota, disk error) surface. Ignoring it
-			// could rename a truncated dump into the catalog with a checksum that
-			// matches the truncated bytes — corrupt-but-looks-valid. The pg_dump
-			// error takes precedence if both occurred.
-			closeErr := f.Close()
-			if backupErr != nil {
+			body, err := os.Open(bodyPath)
+			if err != nil {
+				_ = f.Close()
 				_ = os.Remove(tmpPath)
-				return backupErr
+				return err
 			}
+			if _, err := io.Copy(tee, body); err != nil {
+				_ = body.Close()
+				_ = f.Close()
+				_ = os.Remove(tmpPath)
+				return err
+			}
+			_ = body.Close()
+
+			closeErr := f.Close()
 			if closeErr != nil {
 				_ = os.Remove(tmpPath)
 				return &errs.Error{Op: "app.backup", Code: errs.CodeSystem, Cause: closeErr, Hint: "failed to flush dump to disk (out of space?)"}

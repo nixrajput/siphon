@@ -52,6 +52,18 @@ type ChangeStreamer interface {
 	StreamChanges(ctx context.Context, from canonical.Position, emit func(canonical.CanonicalChange) error) (canonical.Position, error)
 }
 
+// BasePositioner reports the engine's current change-stream position, captured
+// during a full backup so a later incremental knows where to resume from.
+//
+// app.Backup calls this immediately after a full backup completes and stamps the
+// result into the base dump's Envelope. basePosition() then reads a real position
+// instead of the zero value, so the first incremental off a full base resumes
+// from base-end rather than silently starting at "now" (which would drop every
+// change committed between the base dump and the first incremental run).
+type BasePositioner interface {
+	CurrentPosition(ctx context.Context) (canonical.Position, error)
+}
+
 // IncrementalBackuper is an optional Conn capability: capture the BOUNDED change
 // set from `since` to the engine's current end position, serializing each
 // CanonicalChange to w as JSONL, and return the end Position reached.

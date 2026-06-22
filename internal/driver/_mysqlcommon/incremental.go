@@ -20,6 +20,19 @@ type BinlogPosition struct {
 	Position uint64
 }
 
+var _ driver.BasePositioner = (*Conn)(nil)
+
+// CurrentPosition returns the server's current binlog coordinates as a canonical
+// Position. app.Backup calls this right after a full backup so the base dump's
+// Envelope records where the first incremental should resume from.
+func (c *Conn) CurrentPosition(ctx context.Context) (canonical.Position, error) {
+	pos, err := c.CaptureBinlogPosition(ctx)
+	if err != nil {
+		return canonical.Position{}, err
+	}
+	return canonical.Position{BinlogFile: pos.File, BinlogPos: pos.Position}, nil
+}
+
 // CaptureBinlogPosition records the current binlog coordinates. Tries the
 // MySQL 8.4+ statement first, then the pre-8.4 form, so it works across
 // versions and both forks.

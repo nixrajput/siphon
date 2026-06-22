@@ -12,6 +12,18 @@ import (
 )
 
 var _ driver.IncrementalBackuper = (*Conn)(nil)
+var _ driver.BasePositioner = (*Conn)(nil)
+
+// CurrentPosition returns the server's current WAL position via
+// pg_current_wal_lsn(). app.Backup calls this right after a full backup so the
+// base dump's Envelope records where the first incremental should resume from.
+func (c *Conn) CurrentPosition(ctx context.Context) (canonical.Position, error) {
+	var lsn string
+	if err := c.db.QueryRowContext(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&lsn); err != nil {
+		return canonical.Position{}, &errs.Error{Op: "postgres.current_position", Code: errs.CodeSystem, Cause: err}
+	}
+	return canonical.Position{LSN: lsn}, nil
+}
 
 // BackupIncremental captures the BOUNDED change set from `since` to the server's
 // current end LSN, serializing each CanonicalChange to w as JSONL, and returns

@@ -296,6 +296,27 @@ func BuildInsertSQL(engine, table string, cols []string) (string, error) {
 		qt, strings.Join(qcols, ","), strings.Join(phs, ",")), nil
 }
 
+// BuildIdempotentInsertSQL renders an INSERT that silently no-ops on a
+// duplicate key — `ON CONFLICT DO NOTHING` for Postgres, `INSERT IGNORE` for
+// MySQL/MariaDB. Used when replaying incremental changes: a base dump and its
+// first incremental may overlap by a few rows at the position boundary, so an
+// INSERT of an already-present row must not error. (Snapshot loads into a fresh
+// table use the plain BuildInsertSQL.)
+func BuildIdempotentInsertSQL(engine, table string, cols []string) (string, error) {
+	base, err := BuildInsertSQL(engine, table, cols)
+	if err != nil {
+		return "", err
+	}
+	switch engine {
+	case "postgres":
+		return base + " ON CONFLICT DO NOTHING", nil
+	case "mysql", "mariadb":
+		return strings.Replace(base, "INSERT INTO", "INSERT IGNORE INTO", 1), nil
+	default:
+		return "", fmt.Errorf("cross-engine: unknown engine %q", engine)
+	}
+}
+
 // ChangeColumns returns the SET columns (Values minus Key, sorted) and the Key
 // columns (sorted), giving deterministic statement shape and argument order.
 func ChangeColumns(ch CanonicalChange) (setCols, keyCols []string) {
