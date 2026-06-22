@@ -44,6 +44,14 @@ type CanonicalTransfer interface {
 	ApplyChange(ctx context.Context, ch canonical.CanonicalChange) error
 }
 
+// ChangeStreamer is an optional Conn capability: stream logical row changes as
+// engine-neutral CanonicalChanges, starting after `from`. Bounded callers cancel
+// ctx at a target end position; unbounded (CDC) callers stream until ctx cancel.
+// Returns the final Position reached (for envelope stamping / CDC state persistence).
+type ChangeStreamer interface {
+	StreamChanges(ctx context.Context, from canonical.Position, emit func(canonical.CanonicalChange) error) (canonical.Position, error)
+}
+
 // Capabilities describes what an engine supports. Each flag gates a UI
 // affordance or feature path. Drivers must declare honestly.
 type Capabilities struct {
