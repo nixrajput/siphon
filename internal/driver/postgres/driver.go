@@ -24,7 +24,7 @@ func (Driver) Name() string { return "postgres" }
 
 func (Driver) Capabilities() driver.Capabilities {
 	return driver.Capabilities{
-		Incremental:        false, // arrives in Phase F (WAL)
+		Incremental:        true, // Phase F: bounded change capture via logical decoding
 		NativeStream:       true,
 		PerTable:           true,
 		SchemaOnly:         true,

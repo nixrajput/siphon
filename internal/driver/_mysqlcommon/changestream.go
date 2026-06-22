@@ -33,6 +33,15 @@ var _ driver.ChangeStreamer = (*Conn)(nil)
 // events, NULL rendering, quoting) need validation against a live
 // log_bin=ON, binlog_format=ROW server in CI.
 func (c *Conn) StreamChanges(ctx context.Context, from canonical.Position, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
+	return c.streamChangesWithStop(ctx, from, nil, emit)
+}
+
+// streamChangesWithStop is the shared binlog decode driver behind StreamChanges
+// (stopAt==nil, unbounded) and BackupIncremental (stopAt!=nil, bounded). When
+// stopAt is non-nil, parsing returns cleanly at the first row event whose binlog
+// position reaches or passes stopAt — every change up to that point has been
+// emitted, and none past it.
+func (c *Conn) streamChangesWithStop(ctx context.Context, from canonical.Position, stopAt *BinlogPosition, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
 	if err := c.ValidateBinlogFormat(ctx); err != nil {
 		return canonical.Position{}, err
 	}
@@ -64,10 +73,11 @@ func (c *Conn) StreamChanges(ctx context.Context, from canonical.Position, emit 
 		return canonical.Position{}, toolErr(c.binlogBinary, c.binlogBinary+".stream", err)
 	}
 
-	endPos, parseErr := parseBinlogRows(stdout, meta, emit, since)
+	endPos, parseErr := parseBinlogRows(stdout, meta, emit, since, stopAt)
 
-	// Kill the (possibly unbounded) tool and reap it. On ctx cancel the kill is
-	// expected; we only surface a parse error, not the resulting exec error.
+	// Kill the (possibly unbounded) tool and reap it. On ctx cancel — or on a
+	// bounded stop where we stopped reading before EOF — the kill is expected; we
+	// only surface a parse error, not the resulting exec error.
 	_ = cmd.Process.Kill()
 	_ = cmd.Wait()
 
@@ -105,7 +115,7 @@ type rowEvent struct {
 // assembling ### blocks into CanonicalChanges and calling emit per change. It
 // returns the final binlog position seen (from `# at <pos>` comments) so the
 // caller can stamp the envelope / CDC state.
-func parseBinlogRows(r io.Reader, meta *tableMetaCache, emit func(canonical.CanonicalChange) error, start BinlogPosition) (BinlogPosition, error) {
+func parseBinlogRows(r io.Reader, meta *tableMetaCache, emit func(canonical.CanonicalChange) error, start BinlogPosition, stopAt *BinlogPosition) (BinlogPosition, error) {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -133,6 +143,16 @@ func parseBinlogRows(r io.Reader, meta *tableMetaCache, emit func(canonical.Cano
 		// Track the current binlog offset from "# at <pos>" markers.
 		if p, ok := parseAtMarker(line); ok {
 			pos.Position = p
+			// Bounded (incremental) stop: an "# at" marker precedes each event, so
+			// once the marker reaches/passes the captured end position in the end
+			// file, every earlier event has been parsed. Flush the pending event
+			// and return at this clean boundary.
+			if stopAt != nil && pos.File == stopAt.File && pos.Position >= stopAt.Position {
+				if err := flush(); err != nil {
+					return pos, err
+				}
+				return pos, nil
+			}
 			continue
 		}
 		// Track the active binlog file from rotate events.

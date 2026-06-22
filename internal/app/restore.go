@@ -1,9 +1,13 @@
 package app
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 
+	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/dumps"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -78,6 +82,27 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 						Hint:  "dump was created by " + env.Driver + "; cannot restore into a " + resolved.Driver + " target",
 					}
 				}
+				// Incremental links carry a JSONL change body, not a native dump:
+				// replay each change via ApplyChange instead of conn.Restore.
+				if env.Type == dumps.EnvelopeIncremental {
+					applier, ok := conn.(driver.CanonicalTransfer)
+					if !ok {
+						_ = f.Close()
+						return &errs.Error{
+							Op:    "restore",
+							Code:  errs.CodeUser,
+							Cause: errs.ErrDriverUnsupported,
+							Hint:  resolved.Driver + " cannot replay incremental change links",
+						}
+					}
+					if err := replayChanges(ctx, applier, body); err != nil {
+						_ = f.Close()
+						return err
+					}
+					_ = f.Close()
+					continue
+				}
+
 				rOpts := driver.RestoreOpts{
 					TargetTables: opt.TargetTables,
 					SchemaOnly:   opt.SchemaOnly,
@@ -93,6 +118,31 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 			return nil
 		},
 	})
+}
+
+// replayChanges decodes a JSONL stream of CanonicalChanges from r and applies
+// each to the target via ApplyChange, in order. A malformed line aborts the
+// replay so a corrupt incremental never partially applies undetected.
+func replayChanges(ctx context.Context, applier driver.CanonicalTransfer, r io.Reader) error {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for sc.Scan() {
+		line := sc.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var ch canonical.CanonicalChange
+		if err := json.Unmarshal(line, &ch); err != nil {
+			return &errs.Error{Op: "restore.replay", Code: errs.CodeSystem, Cause: err, Hint: "incremental change body is corrupt"}
+		}
+		if err := applier.ApplyChange(ctx, ch); err != nil {
+			return err
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return &errs.Error{Op: "restore.replay", Code: errs.CodeSystem, Cause: err}
+	}
+	return nil
 }
 
 // truncateChain returns chain up to and including the dump named upTo. Unlike

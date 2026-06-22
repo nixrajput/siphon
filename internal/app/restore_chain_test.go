@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/config"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/dumps"
@@ -25,9 +27,12 @@ type chainRestoreCall struct {
 }
 
 // chainFakeConn records every Restore call so a test can assert chain order,
-// per-dump envelope stripping, and that Clean was set only for the base.
+// per-dump envelope stripping, and that Clean was set only for the base. It also
+// implements CanonicalTransfer so incremental (change-replay) links are recorded
+// via ApplyChange.
 type chainFakeConn struct {
-	calls []chainRestoreCall
+	calls   []chainRestoreCall
+	applied []canonical.CanonicalChange
 }
 
 func (c *chainFakeConn) Inspect(_ context.Context) (*driver.Schema, error) {
@@ -53,6 +58,17 @@ func (c *chainFakeConn) Verify(_ context.Context, _ io.Reader) (*driver.VerifyRe
 
 func (c *chainFakeConn) Close() error { return nil }
 
+// EmitCanonical/ConsumeCanonical satisfy CanonicalTransfer; only ApplyChange is
+// exercised by the incremental restore path.
+func (c *chainFakeConn) EmitCanonical(_ context.Context, _ *canonical.CanonicalSchema, _ io.Writer) error {
+	return nil
+}
+func (c *chainFakeConn) ConsumeCanonical(_ context.Context, _ io.Reader) error { return nil }
+func (c *chainFakeConn) ApplyChange(_ context.Context, ch canonical.CanonicalChange) error {
+	c.applied = append(c.applied, ch)
+	return nil
+}
+
 // chainFakeDriver always returns the same chainFakeConn so the test inspects it.
 type chainFakeDriver struct{ conn driver.Conn }
 
@@ -64,8 +80,11 @@ func (d *chainFakeDriver) Connect(_ context.Context, _ driver.Profile) (driver.C
 	return d.conn, nil
 }
 
-// writeChainDump writes a real catalog dump file (envelope header + native
-// payload) at cat.Path(id) plus its sidecar Meta with the given lineage.
+// writeChainDump writes a real catalog dump file (envelope header + body) at
+// cat.Path(id) plus its sidecar Meta with the given lineage. A base dump's body
+// is an opaque native payload (restored via conn.Restore); an incremental dump's
+// body is the payload string wrapped as a single JSONL CanonicalChange (replayed
+// via conn.ApplyChange), so the change's table records the payload.
 func writeChainDump(t *testing.T, cat *dumps.Catalog, id, baseID, parentID, payload string) {
 	t.Helper()
 	f, err := os.Create(cat.Path(id))
@@ -85,7 +104,17 @@ func writeChainDump(t *testing.T, cat *dumps.Catalog, id, baseID, parentID, payl
 		_ = f.Close()
 		t.Fatalf("write envelope %s: %v", id, err)
 	}
-	if _, err := io.WriteString(f, payload); err != nil {
+	body := payload
+	if typ == dumps.EnvelopeIncremental {
+		// Encode the payload as a single JSONL change so the replay path records
+		// it via ApplyChange (the change's Table carries the payload marker).
+		js, err := json.Marshal(canonical.CanonicalChange{Op: canonical.OpInsert, Table: payload, Key: map[string]any{"id": 1}})
+		if err != nil {
+			t.Fatalf("marshal change %s: %v", id, err)
+		}
+		body = string(js) + "\n"
+	}
+	if _, err := io.WriteString(f, body); err != nil {
 		_ = f.Close()
 		t.Fatalf("write payload %s: %v", id, err)
 	}
@@ -137,9 +166,9 @@ func seedThreeDumpChain(t *testing.T, dir string, conn driver.Conn) Deps {
 	return deps
 }
 
-// TestRestoreChain_AppliesInOrder proves the chain is applied base->inc1->inc2
-// and that each recorded body is the native payload with the 4 KB envelope
-// stripped per dump (not the raw file bytes).
+// TestRestoreChain_AppliesInOrder proves the chain is applied base->inc1->inc2:
+// the base goes through conn.Restore (native body, envelope stripped) and each
+// incremental link is replayed through conn.ApplyChange in order.
 func TestRestoreChain_AppliesInOrder(t *testing.T) {
 	conn := &chainFakeConn{}
 	deps := seedThreeDumpChain(t, t.TempDir(), conn)
@@ -150,19 +179,28 @@ func TestRestoreChain_AppliesInOrder(t *testing.T) {
 	}
 	drain(t, ch)
 
-	want := []string{"base-data", "inc1-data", "inc2-data"}
-	if len(conn.calls) != len(want) {
-		t.Fatalf("Restore made %d calls; want %d", len(conn.calls), len(want))
+	// Base: one native Restore call with the envelope stripped.
+	if len(conn.calls) != 1 {
+		t.Fatalf("Restore made %d native calls; want 1 (base only)", len(conn.calls))
 	}
-	for i, w := range want {
-		if conn.calls[i].body != w {
-			t.Fatalf("call %d body = %q; want %q (envelope must be stripped per dump)", i, conn.calls[i].body, w)
+	if conn.calls[0].body != "base-data" {
+		t.Fatalf("base body = %q; want base-data (envelope must be stripped)", conn.calls[0].body)
+	}
+	// Incrementals: replayed via ApplyChange, in order.
+	wantInc := []string{"inc1-data", "inc2-data"}
+	if len(conn.applied) != len(wantInc) {
+		t.Fatalf("ApplyChange called %d times; want %d", len(conn.applied), len(wantInc))
+	}
+	for i, w := range wantInc {
+		if conn.applied[i].Table != w {
+			t.Fatalf("applied[%d].Table = %q; want %q", i, conn.applied[i].Table, w)
 		}
 	}
 }
 
 // TestRestoreChain_CleanOnlyBeforeBase proves Clean is set on the base restore
-// only and false for every incremental, when Restore is called with Clean:true.
+// only; incrementals never run conn.Restore (they replay via ApplyChange), so a
+// destructive Clean cannot leak onto a later link.
 func TestRestoreChain_CleanOnlyBeforeBase(t *testing.T) {
 	conn := &chainFakeConn{}
 	deps := seedThreeDumpChain(t, t.TempDir(), conn)
@@ -173,21 +211,19 @@ func TestRestoreChain_CleanOnlyBeforeBase(t *testing.T) {
 	}
 	drain(t, ch)
 
-	if len(conn.calls) != 3 {
-		t.Fatalf("Restore made %d calls; want 3", len(conn.calls))
+	if len(conn.calls) != 1 {
+		t.Fatalf("Restore made %d native calls; want 1 (base only)", len(conn.calls))
 	}
 	if !conn.calls[0].clean {
 		t.Fatalf("base call clean = false; want true")
 	}
-	for i := 1; i < len(conn.calls); i++ {
-		if conn.calls[i].clean {
-			t.Fatalf("incremental call %d clean = true; want false (clean once, base only)", i)
-		}
+	if len(conn.applied) != 2 {
+		t.Fatalf("ApplyChange called %d times; want 2 (inc1, inc2)", len(conn.applied))
 	}
 }
 
 // TestRestoreChain_UpToTruncates proves --up-to stops the chain early, applying
-// only base and inc1 when targeting inc2 with UpTo=inc1.
+// only base (native) and inc1 (replay) when targeting inc2 with UpTo=inc1.
 func TestRestoreChain_UpToTruncates(t *testing.T) {
 	conn := &chainFakeConn{}
 	deps := seedThreeDumpChain(t, t.TempDir(), conn)
@@ -198,14 +234,11 @@ func TestRestoreChain_UpToTruncates(t *testing.T) {
 	}
 	drain(t, ch)
 
-	want := []string{"base-data", "inc1-data"}
-	if len(conn.calls) != len(want) {
-		t.Fatalf("Restore made %d calls; want %d", len(conn.calls), len(want))
+	if len(conn.calls) != 1 || conn.calls[0].body != "base-data" {
+		t.Fatalf("native calls = %+v; want one base-data call", conn.calls)
 	}
-	for i, w := range want {
-		if conn.calls[i].body != w {
-			t.Fatalf("call %d body = %q; want %q", i, conn.calls[i].body, w)
-		}
+	if len(conn.applied) != 1 || conn.applied[0].Table != "inc1-data" {
+		t.Fatalf("applied = %+v; want one inc1-data change", conn.applied)
 	}
 }
 

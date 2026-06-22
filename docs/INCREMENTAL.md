@@ -27,14 +27,26 @@ looping or silently truncating. `Restore` then applies the resolved chain in
 order, base first (`internal/app/restore.go`). A plain, non-incremental dump
 resolves to a single-element chain, so the same restore path serves both.
 
-The driver-level capture machinery also exists:
+An incremental backup is a **bounded change capture**: starting from the base
+dump's recorded end position, siphon streams the row changes that committed since
+then up to a fixed end position captured at backup time, and serializes each as a
+JSONL `CanonicalChange` (insert/update/delete with primary key + post-image). The
+incremental dump body is therefore engine-neutral change records, not raw
+WAL/binlog bytes. At restore time those changes are **replayed** via
+`ApplyChange` rather than fed to the native restore tool — base links restore
+natively, incremental links replay change records.
 
-- **Postgres** (`internal/driver/postgres/incremental.go`) creates a temporary
-  physical replication slot and records the start/end LSN around a base backup,
-  so a later incremental can resume from the correct WAL position.
+The driver-level capture (`driver.IncrementalBackuper`):
+
+- **Postgres** (`internal/driver/postgres/incremental_change.go`) captures the
+  current `pg_current_wal_lsn()` as the end bound, then drives the same pgoutput
+  logical-decoding loop as CDC with that LSN as a stop target — it returns
+  cleanly at the first message boundary past the bound, so every change committed
+  at or before it is captured and none after.
 - **MySQL/MariaDB** (`internal/driver/_mysqlcommon/incremental.go`) captures the
-  binlog file + position via `SHOW BINARY LOG STATUS` (MySQL 8.4+) or
-  `SHOW MASTER STATUS` (older MySQL / MariaDB).
+  current binlog file + offset via `SHOW BINARY LOG STATUS` (MySQL 8.4+) or
+  `SHOW MASTER STATUS` (older MySQL / MariaDB) as the end bound, then decodes the
+  fork's binlog tool output up to that offset.
 
 ## The CLI surface
 
@@ -45,9 +57,12 @@ siphon restore <dump-id> --profile <target>
 # Stop applying the chain after a specific dump (point-in-chain restore).
 siphon restore <dump-id> --profile <target> --up-to <intermediate-id>
 
-# Request an incremental backup (NOT yet wired — see Status).
+# Take an incremental backup capturing changes since a base dump.
 siphon backup <profile> --incremental --base <base-dump-id>
 ```
+
+`--incremental` requires `--base <dump-id>`; `--base` without `--incremental` (or
+`--incremental` without `--base`) is rejected with a clear error.
 
 ## Status
 
@@ -57,17 +72,17 @@ siphon backup <profile> --incremental --base <base-dump-id>
 | Chain resolution (`ResolveChain`) | ✅ Works |
 | Chain-walking restore (base → incrementals, in order) | ✅ Works |
 | `restore --up-to <id>` (stop chain early) | ✅ Works |
-| Driver-level capture machinery (Postgres WAL slot/LSN, MySQL/MariaDB binlog pos) | ✅ Exists |
-| `backup --incremental --base <id>` end-to-end | ⚠️ Not yet wired (follow-up) |
+| `backup --incremental --base <id>` (bounded change capture) | ✅ Works |
+| Incremental restore (change replay via `ApplyChange`) | ✅ Works |
+| Postgres orphan replication-slot sweep | ✅ Works |
 
-The restore-side chain machinery and the envelope are in place and tested. The
-`--incremental` backup path is a documented follow-up: the driver machinery and
-the chain restore are both ready, but the wiring that ties them together — read
-the base envelope for the parent WAL/binlog position, invoke the driver's
-incremental capture method, and write an `incremental`-type catalog entry — is
-not yet connected. Until then `siphon backup --incremental` returns a clear
-error: *"incremental backup is not yet wired end-to-end (Phase F follow-up); the
-driver-level machinery exists"* (`internal/cli/backup.go`).
+The full incremental path is wired end-to-end: `backup --incremental` reads the
+base envelope's end position, captures the bounded change set via the driver's
+`IncrementalBackuper`, and writes an `incremental`-type catalog entry whose
+envelope carries this capture's end position (so the next incremental resumes
+exactly here). Restore replays each incremental link's changes via `ApplyChange`.
+The live-server behavior is exercised in CI (integration-tagged tests against a
+`wal_level=logical` Postgres); it is compile-checked but not run locally.
 
 ## Examples
 
@@ -88,21 +103,26 @@ siphon restore inc-2 --profile prod-replica --up-to inc-1
 A typo'd `--up-to` is rejected (the dump isn't in the chain) rather than
 silently restoring more than asked.
 
-Requesting an incremental backup (returns the not-wired error today):
+Taking an incremental backup against a base dump:
 
 ```bash
 siphon backup prod --incremental --base base-0
-# Error: incremental backup is not yet wired end-to-end (Phase F follow-up);
-#        the driver-level machinery exists
+# Captures changes committed since base-0's end position and writes a new
+# incremental dump linked to base-0. Restoring it later replays base-0 then the
+# captured changes.
 ```
 
 ## Limitations and runtime gates
 
-These apply to the incremental **backup** path once it is wired:
+These apply to the incremental **backup** path:
 
-- **Postgres** anchors WAL retention with a temporary physical replication slot.
-  Orphan-slot cleanup is **not yet built** — an orphaned slot pins WAL on the
-  server and must be dropped manually until automatic cleanup ships.
+- **Postgres** uses a persistent logical replication slot (`siphon_logical`) as
+  the change-stream resume anchor. Per-base physical slots are swept
+  automatically: before each incremental capture, `SweepOrphanSlots` drops any
+  inactive `siphon_*` physical slot (an inactive siphon slot is by definition
+  orphaned — a completed backup drops its own, an active one is in use). The
+  persistent logical slot is excluded from the sweep so the resume position
+  survives between runs.
 - **MySQL/MariaDB** require `binlog_format=ROW` for usable incrementals.
 - **Cross-version incrementals are unsupported** (`CrossVersionIncremental:
   false`): a chain must be captured and restored against the same engine major

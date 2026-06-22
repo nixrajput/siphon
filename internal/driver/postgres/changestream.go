@@ -41,6 +41,14 @@ var _ driver.ChangeStreamer = (*Conn)(nil)
 // is the normal stop signal and is NOT reported as an error — the final
 // Position reached is returned for envelope stamping / CDC state persistence.
 func (c *Conn) StreamChanges(ctx context.Context, from canonical.Position, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
+	return c.streamWithStop(ctx, from, 0, emit)
+}
+
+// streamWithStop is the shared pgoutput decode driver behind StreamChanges
+// (stopLSN==0, unbounded) and BackupIncremental (stopLSN!=0, bounded). It opens
+// the replication connection, ensures the slot, resolves the start LSN, starts
+// replication, and runs receiveLoop with the given stop bound.
+func (c *Conn) streamWithStop(ctx context.Context, from canonical.Position, stopLSN pglogrepl.LSN, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
 	if err := c.requireLogicalWAL(ctx); err != nil {
 		return canonical.Position{}, err
 	}
@@ -77,12 +85,18 @@ func (c *Conn) StreamChanges(ctx context.Context, from canonical.Position, emit 
 		return canonical.Position{}, &errs.Error{Op: "postgres.stream", Code: errs.CodeSystem, Cause: err}
 	}
 
-	return receiveLoop(ctx, repl, startLSN, emit)
+	return receiveLoop(ctx, repl, startLSN, stopLSN, emit)
 }
 
 // receiveLoop runs the pgoutput receive/decode/ack cycle until ctx is cancelled
 // or emit returns an error. It returns the final committed LSN as a Position.
-func receiveLoop(ctx context.Context, repl *pgconn.PgConn, startLSN pglogrepl.LSN, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
+//
+// stopLSN bounds a BOUNDED (incremental) capture: when non-zero, the loop returns
+// cleanly once the client position reaches or passes it — but only at a message
+// boundary AFTER all changes up to that point have been decoded and emitted, so
+// the bound never truncates a change that committed at or before stopLSN. A zero
+// stopLSN means unbounded (CDC): stream until ctx cancel.
+func receiveLoop(ctx context.Context, repl *pgconn.PgConn, startLSN, stopLSN pglogrepl.LSN, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
 	relations := map[uint32]*pglogrepl.RelationMessage{}
 	typeMap := pgtype.NewMap()
 	clientXLogPos := startLSN
@@ -94,6 +108,16 @@ func receiveLoop(ctx context.Context, repl *pgconn.PgConn, startLSN pglogrepl.LS
 		// ctx cancel is the normal bounded/unbounded stop signal: ack the last
 		// LSN best-effort and return cleanly.
 		if ctx.Err() != nil {
+			_ = pglogrepl.SendStandbyStatusUpdate(context.Background(), repl,
+				pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
+			return finalPos(), nil
+		}
+
+		// Bounded (incremental) stop: once the client has caught up to the target
+		// end LSN, every change committed at or before it has already been decoded
+		// and emitted (XLogData advances clientXLogPos only after decodeWALData),
+		// so it is safe to ack and return the end position.
+		if stopLSN != 0 && clientXLogPos >= stopLSN {
 			_ = pglogrepl.SendStandbyStatusUpdate(context.Background(), repl,
 				pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
 			return finalPos(), nil

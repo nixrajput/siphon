@@ -52,6 +52,20 @@ type ChangeStreamer interface {
 	StreamChanges(ctx context.Context, from canonical.Position, emit func(canonical.CanonicalChange) error) (canonical.Position, error)
 }
 
+// IncrementalBackuper is an optional Conn capability: capture the BOUNDED change
+// set from `since` to the engine's current end position, serializing each
+// CanonicalChange to w as JSONL, and return the end Position reached.
+//
+// "Bounded" means the capture stops at a fixed end position captured at the
+// start of the call (Postgres: pg_current_wal_lsn(); MySQL/MariaDB: the current
+// binlog file+offset), unlike CDC's unbounded StreamChanges. It is implemented
+// in terms of StreamChanges' decode machinery with that end position as a stop
+// target. The returned Position is stamped into the incremental dump's Envelope
+// so the NEXT incremental resumes from exactly here.
+type IncrementalBackuper interface {
+	BackupIncremental(ctx context.Context, since canonical.Position, w io.Writer) (canonical.Position, error)
+}
+
 // Capabilities describes what an engine supports. Each flag gates a UI
 // affordance or feature path. Drivers must declare honestly.
 type Capabilities struct {

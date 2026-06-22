@@ -87,7 +87,7 @@ func TestParseBinlogRows(t *testing.T) {
 	var got []canonical.CanonicalChange
 	emit := func(ch canonical.CanonicalChange) error { got = append(got, ch); return nil }
 
-	pos, err := parseBinlogRows(strings.NewReader(transcript), meta, emit, BinlogPosition{File: "mysql-bin.000001"})
+	pos, err := parseBinlogRows(strings.NewReader(transcript), meta, emit, BinlogPosition{File: "mysql-bin.000001"}, nil)
 	if err != nil {
 		t.Fatalf("parseBinlogRows: %v", err)
 	}
