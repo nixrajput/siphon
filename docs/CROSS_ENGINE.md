@@ -45,25 +45,28 @@ siphon sync --from pg-prod --to mysql-staging --cross-engine
 | --- | --- |
 | Canonical type vocabulary + `MapToNative` matrix | ✅ Works (unit-tested) |
 | JSONL emit/consume with per-engine quoting + placeholders | ✅ Works (unit-tested) |
-| `sync --cross-engine` end-to-end | ⚠️ Gated off (follow-up) |
+| Typed schema introspection (`SchemaInspector`, with primary keys) | ✅ Works (Postgres + MySQL/MariaDB) |
+| `sync --cross-engine` snapshot (existing data) | ✅ Works (integration-tested in CI: Postgres → MySQL) |
+| Cross-engine CDC (continuous change replication) | ✅ Works — see [docs/CDC.md](CDC.md) |
 
-The type-mapping and JSONL-transfer machinery exists and is tested, but
-`sync --cross-engine` is **capability-gated** on `CrossEngineSource`
-(source driver) and `CrossEngineTarget` (target driver). **No driver declares
-either capability today**, so the request is rejected with
-`ErrDriverUnsupported` (`internal/app/sync.go`, `runCrossEngineSync`).
-
-The reason is deliberate: cross-engine translation needs a *typed*
-`CanonicalSchema` (column types), and `driver.Inspect` does not carry column
-types yet. Rather than fabricate a schema, the path stays gated until typed
-schema introspection lands and a driver flips its cross-engine capabilities to
-true. At that point `runCrossEngineSync` gains the real
-emit → translate → consume pipeline.
+`sync --cross-engine` is capability-gated on `CrossEngineSource` (source) and
+`CrossEngineTarget` (target). All three drivers now declare both, backed by
+`driver.SchemaInspector` (typed column introspection from `information_schema` /
+`pg_catalog`, including primary keys) and `driver.CanonicalTransfer` (the
+engine-side emit/consume). `runCrossEngineSync` inspects the source schema,
+streams its rows as canonical JSONL through a bounded `jobs.Stream`, and the
+target re-creates the tables (with primary keys) and inserts the rows —
+translating types via `MapToNative`.
 
 ```bash
 siphon sync --from pg-prod --to mysql-staging --cross-engine
-# Error: cross-engine sync requires typed schema introspection, not yet available
 ```
+
+Scope: this is **data + table structure** (columns, types, primary keys) — not
+behavior. Indexes (beyond the primary key), foreign keys, triggers, views, and
+functions are **not** translated. The live Postgres → MySQL round-trip is
+validated by an integration test in CI (`internal/app/cross_engine_integration_test.go`);
+it is compile-checked locally where Docker is unavailable.
 
 ## Type-mapping matrix
 
@@ -87,11 +90,12 @@ known precision/scale renders as e.g. `DECIMAL(10,2)`.
 
 ## Scope and limitations
 
-The v1 cross-engine scope (once the path is wired) is **data only**:
+The v1 cross-engine scope is **data + table structure**:
 
 - Triggers, views, and stored functions are **skipped**.
-- Index recreation is **not implemented yet**: the consume path issues
-  `CREATE TABLE IF NOT EXISTS` (column definitions only) plus row INSERTs, so
+- Primary keys **are** recreated (the consume path emits `CREATE TABLE … PRIMARY KEY (…)`).
+- Secondary index recreation is **not implemented yet**: the consume path issues
+  `CREATE TABLE IF NOT EXISTS` (column definitions + primary key) plus row INSERTs, so
   only data and table structure transfer. Indexes and any constraints beyond the
   inline column defs are a follow-up.
 - Foreign keys are **deferred**.
