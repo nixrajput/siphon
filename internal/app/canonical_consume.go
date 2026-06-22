@@ -140,7 +140,7 @@ func ApplyChange(ctx context.Context, db *sql.DB, engine string, ch canonical.Ca
 			return &errs.Error{
 				Op:    "canonical.apply",
 				Code:  errs.CodeUser,
-				Cause: errs.ErrIncompatibleEngine,
+				Cause: errs.ErrMissingPrimaryKey,
 				Hint:  "UPDATE on table " + ch.Table + " has no primary key",
 			}
 		}
@@ -168,7 +168,7 @@ func ApplyChange(ctx context.Context, db *sql.DB, engine string, ch canonical.Ca
 			return &errs.Error{
 				Op:    "canonical.apply",
 				Code:  errs.CodeUser,
-				Cause: errs.ErrIncompatibleEngine,
+				Cause: errs.ErrMissingPrimaryKey,
 				Hint:  "DELETE on table " + ch.Table + " has no primary key",
 			}
 		}

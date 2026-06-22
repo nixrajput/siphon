@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/nixrajput/siphon/internal/canonical"
+	"github.com/nixrajput/siphon/internal/errs"
 )
 
 // Tests for EmitCanonical and ConsumeCanonical (db-touching orchestration) will
@@ -26,6 +29,23 @@ func TestApplyChange_BuildsCorrectSQLPerOp(t *testing.T) {
 	}
 	if len(set) != 1 || set[0] != "name" {
 		t.Fatalf("set cols = %v want [name]", set)
+	}
+}
+
+// TestApplyChange_KeylessUpdateDelete_Rejected confirms that UPDATE and DELETE
+// with an empty Key return a CodeUser *errs.Error before touching the db.
+// A nil *sql.DB is intentionally passed to prove the guard fires first.
+func TestApplyChange_KeylessUpdateDelete_Rejected(t *testing.T) {
+	for _, op := range []canonical.ChangeOp{canonical.OpUpdate, canonical.OpDelete} {
+		ch := canonical.CanonicalChange{Op: op, Table: "t", Values: map[string]any{"v": 1}} // no Key
+		err := ApplyChange(context.Background(), nil, "postgres", ch)
+		if err == nil {
+			t.Fatalf("op %s: expected error for empty Key, got nil", op)
+		}
+		var e *errs.Error
+		if !errors.As(err, &e) || e.Code != errs.CodeUser {
+			t.Fatalf("op %s: want *errs.Error CodeUser, got %v", op, err)
+		}
 	}
 }
 

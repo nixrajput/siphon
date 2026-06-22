@@ -16,6 +16,7 @@ var (
 	ErrChecksumMismatch   = errors.New("dump checksum mismatch")
 	ErrDumpCorrupt        = errors.New("dump file corrupt or incomplete")
 	ErrIncompatibleEngine = errors.New("source/target engine incompatible")
+	ErrMissingPrimaryKey  = errors.New("change has no primary key to target")
 	Err2FARequired        = errors.New("two-factor authentication required")
 	ErrCancelled          = errors.New("cancelled by user")
 )
