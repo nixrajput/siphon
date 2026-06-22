@@ -405,3 +405,123 @@ func TestNormalizeScanned_NonBytesUnchanged(t *testing.T) {
 		t.Fatalf("NormalizeScanned(nil) = %v; want nil", got)
 	}
 }
+
+// --- CanonicalChange JSON round-trip ----------------------------------------
+
+func TestCanonicalChange_JSONRoundTrip(t *testing.T) {
+	orig := CanonicalChange{
+		Op:    OpUpdate,
+		Table: "orders",
+		Key:   map[string]any{"id": float64(42)},
+		Values: map[string]any{
+			"id":     float64(42),
+			"status": "shipped",
+		},
+	}
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back CanonicalChange
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Op != orig.Op {
+		t.Errorf("Op: got %q want %q", back.Op, orig.Op)
+	}
+	if back.Table != orig.Table {
+		t.Errorf("Table: got %q want %q", back.Table, orig.Table)
+	}
+	if back.Key["id"] != orig.Key["id"] {
+		t.Errorf("Key[id]: got %v want %v", back.Key["id"], orig.Key["id"])
+	}
+	if back.Values["status"] != orig.Values["status"] {
+		t.Errorf("Values[status]: got %v want %v", back.Values["status"], orig.Values["status"])
+	}
+}
+
+// --- BuildUpdateSQL ----------------------------------------------------------
+
+func TestBuildUpdateSQL_Postgres(t *testing.T) {
+	got, err := BuildUpdateSQL("postgres", "users", []string{"name", "email"}, []string{"id"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `UPDATE "users" SET "name" = $1, "email" = $2 WHERE "id" = $3`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildUpdateSQL_MySQL_CompositeKey(t *testing.T) {
+	got, err := BuildUpdateSQL("mysql", "t", []string{"v"}, []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "UPDATE `t` SET `v` = ? WHERE `a` = ? AND `b` = ?"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildUpdateSQL_InjectionGuard(t *testing.T) {
+	got, err := BuildUpdateSQL("postgres", "t", []string{`evil"col`}, []string{"id"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `"evil""col"`) {
+		t.Fatalf("identifier not quoted/escaped: %s", got)
+	}
+}
+
+func TestBuildUpdateSQL_UnknownEngine(t *testing.T) {
+	if _, err := BuildUpdateSQL("oracle", "t", []string{"v"}, []string{"id"}); err == nil {
+		t.Fatal("BuildUpdateSQL unknown engine: want error, got nil")
+	}
+}
+
+// --- BuildDeleteSQL ----------------------------------------------------------
+
+func TestBuildDeleteSQL_Postgres(t *testing.T) {
+	got, err := BuildDeleteSQL("postgres", "users", []string{"id"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `DELETE FROM "users" WHERE "id" = $1`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildDeleteSQL_MySQL_CompositeKey(t *testing.T) {
+	got, err := BuildDeleteSQL("mysql", "t", []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "DELETE FROM `t` WHERE `a` = ? AND `b` = ?"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildDeleteSQL_UnknownEngine(t *testing.T) {
+	if _, err := BuildDeleteSQL("oracle", "t", []string{"id"}); err == nil {
+		t.Fatal("BuildDeleteSQL unknown engine: want error, got nil")
+	}
+}
+
+// --- BuildCreateTableSQL with PRIMARY KEY ------------------------------------
+
+func TestBuildCreateTableSQL_WithPrimaryKey(t *testing.T) {
+	tbl := CanonicalTable{Name: "users", Columns: []CanonicalColumn{
+		{Name: "id", Type: CTInt, PrimaryKey: true},
+		{Name: "name", Type: CTText},
+	}}
+	got, err := BuildCreateTableSQL("postgres", tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `PRIMARY KEY ("id")`) {
+		t.Fatalf("missing PK clause: %s", got)
+	}
+}

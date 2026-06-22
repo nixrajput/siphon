@@ -196,6 +196,7 @@ func BuildCreateTableSQL(engine string, t CanonicalTable) (string, error) {
 		return "", err
 	}
 	defs := make([]string, len(t.Columns))
+	var pkCols []string
 	for i, c := range t.Columns {
 		qc, err := QuoteIdent(engine, c.Name)
 		if err != nil {
@@ -210,8 +211,63 @@ func BuildCreateTableSQL(engine string, t CanonicalTable) (string, error) {
 			def += " NOT NULL"
 		}
 		defs[i] = def
+		if c.PrimaryKey {
+			pkCols = append(pkCols, qc)
+		}
+	}
+	if len(pkCols) > 0 {
+		defs = append(defs, "PRIMARY KEY ("+strings.Join(pkCols, ", ")+")")
 	}
 	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", qt, strings.Join(defs, ", ")), nil
+}
+
+// BuildUpdateSQL builds an UPDATE statement for the given engine: SET columns
+// come first (1-based placeholders), then key columns. Identifiers are always
+// quoted via QuoteIdent; values are bound, not interpolated.
+func BuildUpdateSQL(engine, table string, setCols, keyCols []string) (string, error) {
+	qt, err := QuoteIdent(engine, table)
+	if err != nil {
+		return "", err
+	}
+	n := 1
+	sets := make([]string, len(setCols))
+	for i, c := range setCols {
+		qc, err := QuoteIdent(engine, c)
+		if err != nil {
+			return "", err
+		}
+		sets[i] = qc + " = " + Placeholder(engine, n)
+		n++
+	}
+	wheres := make([]string, len(keyCols))
+	for i, c := range keyCols {
+		qc, err := QuoteIdent(engine, c)
+		if err != nil {
+			return "", err
+		}
+		wheres[i] = qc + " = " + Placeholder(engine, n)
+		n++
+	}
+	return "UPDATE " + qt + " SET " + strings.Join(sets, ", ") + " WHERE " + strings.Join(wheres, " AND "), nil
+}
+
+// BuildDeleteSQL builds a DELETE FROM statement for the given engine with all
+// key columns in the WHERE clause. Identifiers are always quoted; values are
+// bound (1-based for Postgres, ? for MySQL/MariaDB).
+func BuildDeleteSQL(engine, table string, keyCols []string) (string, error) {
+	qt, err := QuoteIdent(engine, table)
+	if err != nil {
+		return "", err
+	}
+	wheres := make([]string, len(keyCols))
+	for i, c := range keyCols {
+		qc, err := QuoteIdent(engine, c)
+		if err != nil {
+			return "", err
+		}
+		wheres[i] = qc + " = " + Placeholder(engine, i+1)
+	}
+	return "DELETE FROM " + qt + " WHERE " + strings.Join(wheres, " AND "), nil
 }
 
 // BuildInsertSQL renders an INSERT with quoted identifiers and per-engine
