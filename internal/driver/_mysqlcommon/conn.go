@@ -38,6 +38,8 @@ type Conn struct {
 }
 
 var _ driver.Conn = (*Conn)(nil)
+var _ driver.SchemaInspector = (*Conn)(nil)
+var _ driver.CanonicalTransfer = (*Conn)(nil)
 
 // NewConn opens + pings the database and returns a ready Conn. The ping is
 // wrapped in a bounded retry (jobs.Retry, 3 attempts) — same policy as the

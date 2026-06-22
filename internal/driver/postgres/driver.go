@@ -113,4 +113,8 @@ type Conn struct {
 	p  driver.Profile
 }
 
+var _ driver.Conn = (*Conn)(nil)
+var _ driver.SchemaInspector = (*Conn)(nil)
+var _ driver.CanonicalTransfer = (*Conn)(nil)
+
 func (c *Conn) Close() error { return c.db.Close() }
