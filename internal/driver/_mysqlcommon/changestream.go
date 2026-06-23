@@ -179,14 +179,18 @@ func parseBinlogRows(r io.Reader, meta *tableMetaCache, emit func(canonical.Cano
 		// Track the current binlog offset from "# at <pos>" markers.
 		if p, ok := parseAtMarker(line); ok {
 			pos.Position = p
-			// Bounded (incremental) stop: an "# at" marker precedes each event, so
-			// once the marker reaches/passes the captured end position in the end
-			// file, every earlier event has been parsed. Flush the pending event
-			// and return at this clean boundary.
+			// An "# at" marker precedes each event, so it is the boundary at which
+			// the preceding event is complete. Flush the pending event here so it
+			// is emitted promptly — without this, in an unbounded CDC stream the
+			// last change before a quiet period would sit buffered until the next
+			// event (or EOF, which never comes), never reaching the target.
+			if err := flush(); err != nil {
+				return pos, err
+			}
+			// Bounded (incremental) stop: once the marker reaches/passes the
+			// captured end position in the end file, every earlier event has been
+			// parsed and flushed above, so return at this clean boundary.
 			if stopAt != nil && pos.File == stopAt.File && pos.Position >= stopAt.Position {
-				if err := flush(); err != nil {
-					return pos, err
-				}
 				return pos, nil
 			}
 			continue

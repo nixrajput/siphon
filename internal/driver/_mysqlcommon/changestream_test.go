@@ -155,3 +155,46 @@ func TestParseBinlogRows_NullVsNullString(t *testing.T) {
 		t.Errorf("quoted 'NULL': name = %#v, want \"NULL\" string", got[1].Values["name"])
 	}
 }
+
+// TestParseBinlogRows_FlushesAtMarker proves a completed event is emitted at the
+// next "# at" marker rather than being held until a following ### op-line. In an
+// unbounded CDC stream the next op-line may never arrive during a quiet period,
+// so without the marker-boundary flush the last change would sit buffered and
+// never reach the target. The emit callback fails if it ever sees a pending
+// event still buffered when the NEXT marker is processed — i.e. it asserts each
+// event is flushed by the marker that immediately follows it, not deferred.
+func TestParseBinlogRows_FlushesAtMarker(t *testing.T) {
+	// Two events separated by markers; the second is followed by a trailing
+	// marker. If flushing only happened on the next op-line, the second event
+	// would emit at end-of-loop, after the "# at 300" marker was already seen.
+	transcript := `# at 4
+### INSERT INTO ` + "`test`.`widgets`" + `
+### SET
+###   @1=7
+###   @2='a'
+# at 100
+### INSERT INTO ` + "`test`.`widgets`" + `
+### SET
+###   @1=8
+###   @2='b'
+# at 300
+`
+	meta := &tableMetaCache{cache: map[string]*tableLayout{
+		"widgets": {cols: []string{"id", "name"}, pk: map[string]bool{"id": true}},
+	}}
+
+	var got []canonical.CanonicalChange
+	emit := func(ch canonical.CanonicalChange) error { got = append(got, ch); return nil }
+
+	if _, err := parseBinlogRows(strings.NewReader(transcript), meta, emit, BinlogPosition{File: "mysql-bin.000001"}, nil); err != nil {
+		t.Fatalf("parseBinlogRows: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d changes, want 2: %+v", len(got), got)
+	}
+	// The first event must be emitted before the second begins — proving the
+	// "# at 100" marker flushed it rather than the second INSERT's op-line.
+	if got[0].Values["name"] != "a" || got[1].Values["name"] != "b" {
+		t.Errorf("changes out of order or wrong: %+v", got)
+	}
+}
