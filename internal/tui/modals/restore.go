@@ -1,6 +1,8 @@
 package modals
 
 import (
+	"context"
+
 	"github.com/charmbracelet/huh"
 
 	"github.com/nixrajput/siphon/internal/app"
@@ -25,7 +27,7 @@ func NewRestore(d app.Deps, defaultProfile, defaultDump string) (*huh.Form, *Res
 	res := &RestoreResult{Profile: defaultProfile, DumpID: defaultDump}
 
 	var dumpIDField huh.Field
-	metas, err := d.Dumps.List()
+	metas, err := d.Dumps.List(context.Background())
 	if err == nil && len(metas) > 0 {
 		opts := make([]huh.Option[string], len(metas))
 		for i, m := range metas {

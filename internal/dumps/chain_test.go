@@ -1,6 +1,7 @@
 package dumps
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -8,9 +9,9 @@ import (
 func TestResolveChain_SingleBase(t *testing.T) {
 	c, _ := NewCatalog(t.TempDir())
 	base := &Meta{ID: "base", BaseID: "base", Created: time.Now()}
-	_ = c.WriteMeta(base)
+	_ = c.WriteMeta(context.Background(), base)
 
-	chain, err := c.ResolveChain("base")
+	chain, err := c.ResolveChain(context.Background(), "base")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,10 +22,10 @@ func TestResolveChain_SingleBase(t *testing.T) {
 
 func TestResolveChain_BaseAndOneIncremental(t *testing.T) {
 	c, _ := NewCatalog(t.TempDir())
-	_ = c.WriteMeta(&Meta{ID: "base", BaseID: "base", Created: time.Now()})
-	_ = c.WriteMeta(&Meta{ID: "inc1", BaseID: "base", ParentID: "base", Created: time.Now()})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "base", BaseID: "base", Created: time.Now()})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "inc1", BaseID: "base", ParentID: "base", Created: time.Now()})
 
-	chain, err := c.ResolveChain("inc1")
+	chain, err := c.ResolveChain(context.Background(), "inc1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,11 +36,11 @@ func TestResolveChain_BaseAndOneIncremental(t *testing.T) {
 
 func TestResolveChain_MultiIncremental(t *testing.T) {
 	c, _ := NewCatalog(t.TempDir())
-	_ = c.WriteMeta(&Meta{ID: "base", BaseID: "base", Created: time.Now()})
-	_ = c.WriteMeta(&Meta{ID: "inc1", BaseID: "base", ParentID: "base", Created: time.Now()})
-	_ = c.WriteMeta(&Meta{ID: "inc2", BaseID: "base", ParentID: "inc1", Created: time.Now()})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "base", BaseID: "base", Created: time.Now()})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "inc1", BaseID: "base", ParentID: "base", Created: time.Now()})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "inc2", BaseID: "base", ParentID: "inc1", Created: time.Now()})
 
-	chain, err := c.ResolveChain("inc2")
+	chain, err := c.ResolveChain(context.Background(), "inc2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +51,10 @@ func TestResolveChain_MultiIncremental(t *testing.T) {
 
 func TestResolveChain_DetectsCycle(t *testing.T) {
 	c, _ := NewCatalog(t.TempDir())
-	_ = c.WriteMeta(&Meta{ID: "a", BaseID: "x", ParentID: "b"})
-	_ = c.WriteMeta(&Meta{ID: "b", BaseID: "x", ParentID: "a"})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "a", BaseID: "x", ParentID: "b"})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "b", BaseID: "x", ParentID: "a"})
 
-	if _, err := c.ResolveChain("a"); err == nil {
+	if _, err := c.ResolveChain(context.Background(), "a"); err == nil {
 		t.Fatal("expected cycle error")
 	}
 }
@@ -61,9 +62,9 @@ func TestResolveChain_DetectsCycle(t *testing.T) {
 func TestResolveChain_BrokenChain_MissingParent(t *testing.T) {
 	c, _ := NewCatalog(t.TempDir())
 	// inc1 claims a parent that was never written.
-	_ = c.WriteMeta(&Meta{ID: "inc1", BaseID: "base", ParentID: "base", Created: time.Now()})
+	_ = c.WriteMeta(context.Background(), &Meta{ID: "inc1", BaseID: "base", ParentID: "base", Created: time.Now()})
 
-	if _, err := c.ResolveChain("inc1"); err == nil {
+	if _, err := c.ResolveChain(context.Background(), "inc1"); err == nil {
 		t.Fatal("expected broken-chain error (missing base)")
 	}
 }

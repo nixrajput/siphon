@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase G (ops) — **cloud storage backends** (first G cycle):
+  - New `internal/storage` leaf defining a backend-neutral `Store` interface (`Put`/`Get`/`Delete`/`List`/`Stat`, all context-aware) with two implementations: **local** (the previous filesystem layout, now behind the interface — temp-write+rename for atomic publish, keys map verbatim to file names so existing catalogs need no migration) and **s3** (S3 and S3-compatible services like MinIO/R2 via AWS SDK v2; streaming transfer-manager upload that is atomic on completion, path-style for custom endpoints).
+  - `internal/dumps.Catalog` refactored to hold a `Store` and address dumps by key (`<id>.dump`, `<id>.meta.json`) instead of filesystem paths; `Path`/`MetaPath`/`Root` removed. Catalog methods (`PutDump`/`OpenDump`/`ReadMeta`/`WriteMeta`/`List`/`Delete`/`ResolveChain`/`PruneDryRun`) are now context-aware. `backup`, `restore`, `verify`, and `dumps` stream through the store; SHA-256 integrity is computed app-side over `envelope ++ body`, so a dump verifies identically whether it lives locally or in S3.
+  - New `storage:` config block (`type: local|s3`, `bucket`, `prefix`, `region`, `endpoint`) with fail-fast validation; S3 credentials resolve from the standard AWS chain (never stored in config). See [docs/STORAGE.md](docs/STORAGE.md).
+  - A shared `RunStoreSuite` contract test (mirroring Phase D's `RunDriverSuite`) runs against every backend: the local backend runs it as a unit test, and the S3 backend runs it against MinIO via testcontainers under the `integration` tag, so the live object-store path executes in CI. GCS/Azure backends are a fast-follow.
+
 - Phase A skeleton: Go module, Cobra CLI with placeholder subcommands, Bubble Tea TUI placeholder, Driver interface + registry, errs package, config stub, Makefile, golangci-lint with depguard, CI workflow.
 - Phase B Postgres walking skeleton: `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, and `profile` working end-to-end against PostgreSQL (shelling out to `pg_dump`/`pg_restore`, pgx for inspect), SHA-256 dump checksums with sidecar metadata, named profiles with `env:` secret refs, and POSIX exit-code taxonomy.
 - Phase C interactive TUI dashboard: multi-panel Bubble Tea UI (profiles · dumps · jobs) with live job-progress subscription, backup/restore modal forms, an error overlay, and golden snapshot tests.

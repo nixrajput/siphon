@@ -76,7 +76,7 @@ func TestBackup_WritesDumpAndMeta(t *testing.T) {
 	for range ch { /* drain */
 	}
 
-	got, err := cat.List()
+	got, err := cat.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestBackup_FullStampsBasePosition(t *testing.T) {
 	for range ch { /* drain */
 	}
 
-	got, err := cat.List()
+	got, err := cat.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestBackup_FullStampsBasePosition(t *testing.T) {
 		t.Fatalf("catalog.List() = %d entries; want 1", len(got))
 	}
 
-	pos, err := basePosition(deps, got[0].ID)
+	pos, err := basePosition(context.Background(), deps, got[0].ID)
 	if err != nil {
 		t.Fatalf("basePosition: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestBackup_DumpError_CleansTmpAndWritesNoCatalogEntry(t *testing.T) {
 	}
 
 	// No catalog entry should have been recorded.
-	got, err := cat.List()
+	got, err := cat.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

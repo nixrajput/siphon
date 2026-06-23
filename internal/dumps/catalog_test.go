@@ -1,6 +1,7 @@
 package dumps
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func TestCatalog_WriteRead_Roundtrip(t *testing.T) {
 		Checksum:  "sha256:abc",
 		SizeBytes: 1234,
 	}
-	if err := c.WriteMeta(m); err != nil {
+	if err := c.WriteMeta(context.Background(), m); err != nil {
 		t.Fatal(err)
 	}
 
@@ -33,7 +34,7 @@ func TestCatalog_WriteRead_Roundtrip(t *testing.T) {
 		t.Fatalf("expected sidecar to exist: %v", statErr)
 	}
 
-	got, err := c.ReadMeta(m.ID)
+	got, err := c.ReadMeta(context.Background(), m.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,10 +49,10 @@ func TestCatalog_List_SortsNewestFirst(t *testing.T) {
 
 	old := &Meta{ID: "01HOLD0000000000000000000", Created: time.Now().Add(-24 * time.Hour)}
 	new_ := &Meta{ID: "01HNEW0000000000000000000", Created: time.Now()}
-	_ = c.WriteMeta(old)
-	_ = c.WriteMeta(new_)
+	_ = c.WriteMeta(context.Background(), old)
+	_ = c.WriteMeta(context.Background(), new_)
 
-	got, err := c.List()
+	got, err := c.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,10 +67,10 @@ func TestCatalog_PruneDryRun_AppliesMaxAge(t *testing.T) {
 
 	old := &Meta{ID: "01HOLD0000000000000000000", Created: time.Now().Add(-48 * time.Hour)}
 	new_ := &Meta{ID: "01HNEW0000000000000000000", Created: time.Now()}
-	_ = c.WriteMeta(old)
-	_ = c.WriteMeta(new_)
+	_ = c.WriteMeta(context.Background(), old)
+	_ = c.WriteMeta(context.Background(), new_)
 
-	rep, err := c.PruneDryRun(RetentionPolicy{MaxAge: 24 * time.Hour})
+	rep, err := c.PruneDryRun(context.Background(), RetentionPolicy{MaxAge: 24 * time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,16 +90,16 @@ func TestCatalog_RejectsTraversalID(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"../escape", "../../etc/passwd", "a/b", `a\b`, "", "..", "."} {
-		if _, err := c.ReadMeta(bad); err == nil {
+		if _, err := c.ReadMeta(context.Background(), bad); err == nil {
 			t.Errorf("ReadMeta(%q) = nil error; want rejection", bad)
 		}
-		if err := c.Delete(bad); err == nil {
+		if err := c.Delete(context.Background(), bad); err == nil {
 			t.Errorf("Delete(%q) = nil error; want rejection", bad)
 		}
 	}
 	// A clean ULID-like id passes validation, so ReadMeta proceeds and fails
 	// only because the dump doesn't exist — surfaced as errs.ErrDumpCorrupt.
-	_, err = c.ReadMeta("01HXKZ000000000000000000")
+	_, err = c.ReadMeta(context.Background(), "01HXKZ000000000000000000")
 	if err == nil {
 		t.Fatal("ReadMeta(valid-but-missing id) = nil error; want a not-found error")
 	}

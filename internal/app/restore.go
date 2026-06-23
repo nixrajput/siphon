@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 
 	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
@@ -38,7 +37,7 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 		return nil, "", err
 	}
 
-	chain, err := d.Dumps.ResolveChain(opt.DumpID)
+	chain, err := d.Dumps.ResolveChain(parent, opt.DumpID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -76,7 +75,7 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 
 			for i, m := range chain {
 				emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "applying " + m.ID})
-				f, err := os.Open(d.Dumps.Path(m.ID))
+				f, err := d.Dumps.OpenDump(ctx, m.ID)
 				if err != nil {
 					return err
 				}

@@ -1,6 +1,7 @@
 package panels
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -81,7 +82,7 @@ func (p Dumps) SelectedID() string {
 
 // Reload rebuilds the rows from the catalog.
 func (p *Dumps) Reload() {
-	all, err := p.deps.Dumps.List()
+	all, err := p.deps.Dumps.List(context.Background())
 	if err != nil {
 		return
 	}

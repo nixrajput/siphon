@@ -1,11 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"testing"
 	"time"
 
@@ -87,21 +87,18 @@ func (d *chainFakeDriver) Connect(_ context.Context, _ driver.Profile) (driver.C
 // via conn.ApplyChange), so the change's table records the payload.
 func writeChainDump(t *testing.T, cat *dumps.Catalog, id, baseID, parentID, payload string) {
 	t.Helper()
-	f, err := os.Create(cat.Path(id))
-	if err != nil {
-		t.Fatalf("create dump %s: %v", id, err)
-	}
+	ctx := context.Background()
 	typ := dumps.EnvelopeIncremental
 	if parentID == "" {
 		typ = dumps.EnvelopeBase
 	}
-	if _, err := dumps.WriteEnvelope(f, &dumps.Envelope{
+	var buf bytes.Buffer
+	if _, err := dumps.WriteEnvelope(&buf, &dumps.Envelope{
 		Type:     typ,
 		Driver:   "fake",
 		BaseID:   baseID,
 		ParentID: parentID,
 	}); err != nil {
-		_ = f.Close()
 		t.Fatalf("write envelope %s: %v", id, err)
 	}
 	body := payload
@@ -114,14 +111,11 @@ func writeChainDump(t *testing.T, cat *dumps.Catalog, id, baseID, parentID, payl
 		}
 		body = string(js) + "\n"
 	}
-	if _, err := io.WriteString(f, body); err != nil {
-		_ = f.Close()
-		t.Fatalf("write payload %s: %v", id, err)
+	buf.WriteString(body)
+	if err := cat.PutDump(ctx, id, &buf); err != nil {
+		t.Fatalf("put dump %s: %v", id, err)
 	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close dump %s: %v", id, err)
-	}
-	if err := cat.WriteMeta(&dumps.Meta{
+	if err := cat.WriteMeta(ctx, &dumps.Meta{
 		ID:       id,
 		Profile:  "test",
 		Driver:   "fake",
@@ -270,26 +264,20 @@ func TestRestoreChain_UpToUnknownErrors(t *testing.T) {
 // any destructive Clean runs.
 func writeMismatchDump(t *testing.T, cat *dumps.Catalog, id, envDriver string) {
 	t.Helper()
-	f, err := os.Create(cat.Path(id))
-	if err != nil {
-		t.Fatalf("create dump %s: %v", id, err)
-	}
-	if _, err := dumps.WriteEnvelope(f, &dumps.Envelope{
+	ctx := context.Background()
+	var buf bytes.Buffer
+	if _, err := dumps.WriteEnvelope(&buf, &dumps.Envelope{
 		Type:   dumps.EnvelopeBase,
 		Driver: envDriver,
 		BaseID: id,
 	}); err != nil {
-		_ = f.Close()
 		t.Fatalf("write envelope %s: %v", id, err)
 	}
-	if _, err := io.WriteString(f, "payload"); err != nil {
-		_ = f.Close()
-		t.Fatalf("write payload %s: %v", id, err)
+	buf.WriteString("payload")
+	if err := cat.PutDump(ctx, id, &buf); err != nil {
+		t.Fatalf("put dump %s: %v", id, err)
 	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close dump %s: %v", id, err)
-	}
-	if err := cat.WriteMeta(&dumps.Meta{
+	if err := cat.WriteMeta(ctx, &dumps.Meta{
 		ID:      id,
 		Profile: "test",
 		Driver:  envDriver,
