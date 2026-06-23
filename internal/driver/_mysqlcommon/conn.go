@@ -34,16 +34,19 @@ type Conn struct {
 	dumpBinary   string // "mysqldump" or "mariadb-dump"
 	clientBinary string // "mysql" or "mariadb"
 	binlogBinary string // "mysqlbinlog" or "mariadb-binlog"
+	engine       string // "mysql" or "mariadb"
 }
 
 var _ driver.Conn = (*Conn)(nil)
+var _ driver.SchemaInspector = (*Conn)(nil)
+var _ driver.CanonicalTransfer = (*Conn)(nil)
 
 // NewConn opens + pings the database and returns a ready Conn. The ping is
 // wrapped in a bounded retry (jobs.Retry, 3 attempts) — same policy as the
 // Postgres driver (spec §4.3). connOp is the error-wrapping op label, e.g.
 // "mysql.connect" / "mariadb.connect", so errors name the right driver. The
 // three binary names (dump/client/binlog) are the only per-fork difference.
-func NewConn(ctx context.Context, p driver.Profile, dumpBinary, clientBinary, binlogBinary, connOp string) (*Conn, error) {
+func NewConn(ctx context.Context, p driver.Profile, dumpBinary, clientBinary, binlogBinary, connOp, engine string) (*Conn, error) {
 	db, err := Open(p)
 	if err != nil {
 		return nil, connErr(connOp, err)
@@ -52,7 +55,7 @@ func NewConn(ctx context.Context, p driver.Profile, dumpBinary, clientBinary, bi
 		_ = db.Close()
 		return nil, connErr(connOp, err)
 	}
-	return &Conn{db: db, p: p, dumpBinary: dumpBinary, clientBinary: clientBinary, binlogBinary: binlogBinary}, nil
+	return &Conn{db: db, p: p, dumpBinary: dumpBinary, clientBinary: clientBinary, binlogBinary: binlogBinary, engine: engine}, nil
 }
 
 // connErr wraps a connection failure in the shape the harness asserts on

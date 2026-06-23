@@ -51,6 +51,7 @@ func NewRoot(out, err io.Writer) *cobra.Command {
 		newBackupCmd(),
 		newRestoreCmd(),
 		newSyncCmd(),
+		newCdcCmd(),
 		newVerifyCmd(),
 		newInspectCmd(),
 		newProfileCmd(),

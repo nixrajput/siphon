@@ -1,4 +1,4 @@
-package app
+package canonical
 
 import (
 	"encoding/json"
@@ -65,20 +65,20 @@ func TestMapToNative_PrecisionDecoration(t *testing.T) {
 	}
 }
 
-// --- quoteIdent (INJECTION GUARD) ------------------------------------------
+// --- QuoteIdent (INJECTION GUARD) ------------------------------------------
 
 func TestQuoteIdent_Postgres(t *testing.T) {
-	got, err := quoteIdent("postgres", "users")
+	got, err := QuoteIdent("postgres", "users")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != `"users"` {
-		t.Errorf("postgres quoteIdent: got %q want %q", got, `"users"`)
+		t.Errorf("postgres QuoteIdent: got %q want %q", got, `"users"`)
 	}
 }
 
 func TestQuoteIdent_PostgresEscapesQuote(t *testing.T) {
-	got, err := quoteIdent("postgres", `we"ird`)
+	got, err := QuoteIdent("postgres", `we"ird`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,17 +88,17 @@ func TestQuoteIdent_PostgresEscapesQuote(t *testing.T) {
 }
 
 func TestQuoteIdent_MySQL(t *testing.T) {
-	got, err := quoteIdent("mysql", "users")
+	got, err := QuoteIdent("mysql", "users")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != "`users`" {
-		t.Errorf("mysql quoteIdent: got %q want %q", got, "`users`")
+		t.Errorf("mysql QuoteIdent: got %q want %q", got, "`users`")
 	}
 }
 
 func TestQuoteIdent_MySQLEscapesBacktick(t *testing.T) {
-	got, err := quoteIdent("mysql", "we`ird")
+	got, err := QuoteIdent("mysql", "we`ird")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,8 @@ func TestQuoteIdent_MySQLEscapesBacktick(t *testing.T) {
 }
 
 func TestQuoteIdent_UnknownEngine(t *testing.T) {
-	if _, err := quoteIdent("oracle", "users"); err == nil {
-		t.Fatal("quoteIdent with unknown engine: want error, got nil")
+	if _, err := QuoteIdent("oracle", "users"); err == nil {
+		t.Fatal("QuoteIdent with unknown engine: want error, got nil")
 	}
 }
 
@@ -119,7 +119,7 @@ func TestQuoteIdent_UnknownEngine(t *testing.T) {
 func TestQuoteIdent_InjectionIsNeutralized(t *testing.T) {
 	evil := `x"; DROP TABLE y; --`
 
-	pg, err := quoteIdent("postgres", evil)
+	pg, err := QuoteIdent("postgres", evil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestQuoteIdent_InjectionIsNeutralized(t *testing.T) {
 		t.Errorf("postgres injection: raw quote leaked through: %q", pg)
 	}
 
-	my, err := quoteIdent("mysql", "x`; DROP TABLE y; --")
+	my, err := QuoteIdent("mysql", "x`; DROP TABLE y; --")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestQuoteIdent_InjectionIsNeutralized(t *testing.T) {
 	}
 }
 
-// --- placeholder -----------------------------------------------------------
+// --- Placeholder -----------------------------------------------------------
 
 func TestPlaceholder(t *testing.T) {
 	cases := []struct {
@@ -157,8 +157,8 @@ func TestPlaceholder(t *testing.T) {
 		{"mariadb", 2, "?"},
 	}
 	for _, c := range cases {
-		if got := placeholder(c.engine, c.n); got != c.want {
-			t.Errorf("placeholder(%q, %d): got %q want %q", c.engine, c.n, got, c.want)
+		if got := Placeholder(c.engine, c.n); got != c.want {
+			t.Errorf("Placeholder(%q, %d): got %q want %q", c.engine, c.n, got, c.want)
 		}
 	}
 }
@@ -176,7 +176,7 @@ func twoColTable() CanonicalTable {
 }
 
 func TestBuildCreateTableSQL_Postgres(t *testing.T) {
-	got, err := buildCreateTableSQL("postgres", twoColTable())
+	got, err := BuildCreateTableSQL("postgres", twoColTable())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestBuildCreateTableSQL_Postgres(t *testing.T) {
 }
 
 func TestBuildCreateTableSQL_MySQL(t *testing.T) {
-	got, err := buildCreateTableSQL("mysql", twoColTable())
+	got, err := BuildCreateTableSQL("mysql", twoColTable())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,8 +198,8 @@ func TestBuildCreateTableSQL_MySQL(t *testing.T) {
 }
 
 func TestBuildCreateTableSQL_UnknownEngine(t *testing.T) {
-	if _, err := buildCreateTableSQL("oracle", twoColTable()); err == nil {
-		t.Fatal("buildCreateTableSQL unknown engine: want error, got nil")
+	if _, err := BuildCreateTableSQL("oracle", twoColTable()); err == nil {
+		t.Fatal("BuildCreateTableSQL unknown engine: want error, got nil")
 	}
 }
 
@@ -210,7 +210,7 @@ func TestBuildCreateTableSQL_InjectionGuard(t *testing.T) {
 		Name:    "t",
 		Columns: []CanonicalColumn{{Name: `evil"col`, Type: CTInt, Nullable: true}},
 	}
-	got, err := buildCreateTableSQL("postgres", tbl)
+	got, err := BuildCreateTableSQL("postgres", tbl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestBuildCreateTableSQL_InjectionGuard(t *testing.T) {
 }
 
 func TestBuildInsertSQL_Postgres(t *testing.T) {
-	got, err := buildInsertSQL("postgres", "t", []string{"id", "name"})
+	got, err := BuildInsertSQL("postgres", "t", []string{"id", "name"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestBuildInsertSQL_Postgres(t *testing.T) {
 }
 
 func TestBuildInsertSQL_MySQL(t *testing.T) {
-	got, err := buildInsertSQL("mysql", "t", []string{"id", "name"})
+	got, err := BuildInsertSQL("mysql", "t", []string{"id", "name"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,20 +245,48 @@ func TestBuildInsertSQL_MySQL(t *testing.T) {
 	}
 }
 
+func TestBuildIdempotentInsertSQL_Postgres(t *testing.T) {
+	got, err := BuildIdempotentInsertSQL("postgres", "t", []string{"id", "name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `INSERT INTO "t" ("id","name") VALUES ($1,$2) ON CONFLICT DO NOTHING`
+	if got != want {
+		t.Errorf("postgres idempotent INSERT:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBuildIdempotentInsertSQL_MySQL(t *testing.T) {
+	got, err := BuildIdempotentInsertSQL("mysql", "t", []string{"id", "name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "INSERT IGNORE INTO `t` (`id`,`name`) VALUES (?,?)"
+	if got != want {
+		t.Errorf("mysql idempotent INSERT:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBuildIdempotentInsertSQL_UnknownEngine(t *testing.T) {
+	if _, err := BuildIdempotentInsertSQL("oracle", "t", []string{"id"}); err == nil {
+		t.Fatal("BuildIdempotentInsertSQL unknown engine: want error, got nil")
+	}
+}
+
 func TestBuildInsertSQL_EmptyColumns(t *testing.T) {
-	if _, err := buildInsertSQL("postgres", "t", nil); err == nil {
-		t.Fatal("buildInsertSQL with no columns: want error, got nil")
+	if _, err := BuildInsertSQL("postgres", "t", nil); err == nil {
+		t.Fatal("BuildInsertSQL with no columns: want error, got nil")
 	}
 }
 
 func TestBuildInsertSQL_UnknownEngine(t *testing.T) {
-	if _, err := buildInsertSQL("oracle", "t", []string{"id"}); err == nil {
-		t.Fatal("buildInsertSQL unknown engine: want error, got nil")
+	if _, err := BuildInsertSQL("oracle", "t", []string{"id"}); err == nil {
+		t.Fatal("BuildInsertSQL unknown engine: want error, got nil")
 	}
 }
 
 func TestBuildSelectSQL_Postgres(t *testing.T) {
-	got, err := buildSelectSQL("postgres", twoColTable())
+	got, err := BuildSelectSQL("postgres", twoColTable())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +297,7 @@ func TestBuildSelectSQL_Postgres(t *testing.T) {
 }
 
 func TestBuildSelectSQL_MySQL(t *testing.T) {
-	got, err := buildSelectSQL("mysql", twoColTable())
+	got, err := BuildSelectSQL("mysql", twoColTable())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,12 +307,12 @@ func TestBuildSelectSQL_MySQL(t *testing.T) {
 	}
 }
 
-// --- JSONL framing ---------------------------------------------------------
+// --- WriteJSONL framing ----------------------------------------------------
 
 func TestWriteJSONL_SchemaHeaderFirst(t *testing.T) {
 	var sb strings.Builder
 	schema := &CanonicalSchema{Tables: []CanonicalTable{twoColTable()}}
-	if err := writeJSONL(&sb, map[string]*CanonicalSchema{"schema": schema}); err != nil {
+	if err := WriteJSONL(&sb, map[string]*CanonicalSchema{"schema": schema}); err != nil {
 		t.Fatal(err)
 	}
 	out := sb.String()
@@ -292,7 +320,7 @@ func TestWriteJSONL_SchemaHeaderFirst(t *testing.T) {
 		t.Errorf("first line must start with schema key, got %q", out)
 	}
 	if !strings.HasSuffix(out, "\n") {
-		t.Error("writeJSONL must terminate the line with a newline")
+		t.Error("WriteJSONL must terminate the line with a newline")
 	}
 }
 
@@ -341,7 +369,7 @@ func TestSchemaHeader_RoundTrip(t *testing.T) {
 		}},
 	}}
 	var sb strings.Builder
-	if err := writeJSONL(&sb, map[string]*CanonicalSchema{"schema": schema}); err != nil {
+	if err := WriteJSONL(&sb, map[string]*CanonicalSchema{"schema": schema}); err != nil {
 		t.Fatal(err)
 	}
 	var header struct {
@@ -359,7 +387,7 @@ func TestSchemaHeader_RoundTrip(t *testing.T) {
 	}
 }
 
-// --- normalizeScanned ------------------------------------------------------
+// --- NormalizeScanned ------------------------------------------------------
 
 // TestNormalizeScanned_BytesBecomeString proves a []byte value scanned from
 // database/sql is converted to a string so it marshals as a JSON string and
@@ -367,18 +395,18 @@ func TestSchemaHeader_RoundTrip(t *testing.T) {
 // value before ConsumeCanonical re-inserts it).
 func TestNormalizeScanned_BytesBecomeString(t *testing.T) {
 	in := []byte("hello-world")
-	got := normalizeScanned(in)
+	got := NormalizeScanned(in)
 	s, ok := got.(string)
 	if !ok {
-		t.Fatalf("normalizeScanned([]byte) returned %T; want string", got)
+		t.Fatalf("NormalizeScanned([]byte) returned %T; want string", got)
 	}
 	if s != "hello-world" {
-		t.Fatalf("normalizeScanned = %q; want %q", s, "hello-world")
+		t.Fatalf("NormalizeScanned = %q; want %q", s, "hello-world")
 	}
 
 	// Round-trip through the row marshal: a []byte value must come back as the
 	// original text, NOT base64.
-	row := CanonicalRow{Table: "t", Values: map[string]any{"c": normalizeScanned([]byte("café"))}}
+	row := CanonicalRow{Table: "t", Values: map[string]any{"c": NormalizeScanned([]byte("café"))}}
 	b, err := json.Marshal(row)
 	if err != nil {
 		t.Fatal(err)
@@ -398,10 +426,194 @@ func TestNormalizeScanned_BytesBecomeString(t *testing.T) {
 // TestNormalizeScanned_NonBytesUnchanged confirms non-[]byte values pass
 // through untouched.
 func TestNormalizeScanned_NonBytesUnchanged(t *testing.T) {
-	if got := normalizeScanned(int64(42)); got != int64(42) {
-		t.Fatalf("normalizeScanned(int64) = %v; want 42", got)
+	if got := NormalizeScanned(int64(42)); got != int64(42) {
+		t.Fatalf("NormalizeScanned(int64) = %v; want 42", got)
 	}
-	if got := normalizeScanned(nil); got != nil {
-		t.Fatalf("normalizeScanned(nil) = %v; want nil", got)
+	if got := NormalizeScanned(nil); got != nil {
+		t.Fatalf("NormalizeScanned(nil) = %v; want nil", got)
+	}
+}
+
+// --- CanonicalChange JSON round-trip ----------------------------------------
+
+func TestCanonicalChange_JSONRoundTrip(t *testing.T) {
+	orig := CanonicalChange{
+		Op:    OpUpdate,
+		Table: "orders",
+		Key:   map[string]any{"id": float64(42)},
+		Values: map[string]any{
+			"id":     float64(42),
+			"status": "shipped",
+		},
+	}
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back CanonicalChange
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Op != orig.Op {
+		t.Errorf("Op: got %q want %q", back.Op, orig.Op)
+	}
+	if back.Table != orig.Table {
+		t.Errorf("Table: got %q want %q", back.Table, orig.Table)
+	}
+	if back.Key["id"] != orig.Key["id"] {
+		t.Errorf("Key[id]: got %v want %v", back.Key["id"], orig.Key["id"])
+	}
+	if back.Values["status"] != orig.Values["status"] {
+		t.Errorf("Values[status]: got %v want %v", back.Values["status"], orig.Values["status"])
+	}
+}
+
+// --- BuildUpdateSQL ----------------------------------------------------------
+
+func TestBuildUpdateSQL_Postgres(t *testing.T) {
+	got, err := BuildUpdateSQL("postgres", "users", []string{"name", "email"}, []string{"id"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `UPDATE "users" SET "name" = $1, "email" = $2 WHERE "id" = $3`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildUpdateSQL_MySQL_CompositeKey(t *testing.T) {
+	got, err := BuildUpdateSQL("mysql", "t", []string{"v"}, []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "UPDATE `t` SET `v` = ? WHERE `a` = ? AND `b` = ?"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildUpdateSQL_InjectionGuard(t *testing.T) {
+	got, err := BuildUpdateSQL("postgres", "t", []string{`evil"col`}, []string{"id"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `"evil""col"`) {
+		t.Fatalf("identifier not quoted/escaped: %s", got)
+	}
+}
+
+func TestBuildUpdateSQL_UnknownEngine(t *testing.T) {
+	if _, err := BuildUpdateSQL("oracle", "t", []string{"v"}, []string{"id"}); err == nil {
+		t.Fatal("BuildUpdateSQL unknown engine: want error, got nil")
+	}
+}
+
+// --- BuildDeleteSQL ----------------------------------------------------------
+
+func TestBuildDeleteSQL_Postgres(t *testing.T) {
+	got, err := BuildDeleteSQL("postgres", "users", []string{"id"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `DELETE FROM "users" WHERE "id" = $1`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildDeleteSQL_MySQL_CompositeKey(t *testing.T) {
+	got, err := BuildDeleteSQL("mysql", "t", []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "DELETE FROM `t` WHERE `a` = ? AND `b` = ?"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildDeleteSQL_UnknownEngine(t *testing.T) {
+	if _, err := BuildDeleteSQL("oracle", "t", []string{"id"}); err == nil {
+		t.Fatal("BuildDeleteSQL unknown engine: want error, got nil")
+	}
+}
+
+// --- BuildCreateTableSQL with PRIMARY KEY ------------------------------------
+
+func TestBuildCreateTableSQL_WithPrimaryKey(t *testing.T) {
+	tbl := CanonicalTable{Name: "users", Columns: []CanonicalColumn{
+		{Name: "id", Type: CTInt, PrimaryKey: true},
+		{Name: "name", Type: CTText},
+	}}
+	got, err := BuildCreateTableSQL("postgres", tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `PRIMARY KEY ("id")`) {
+		t.Fatalf("missing PK clause: %s", got)
+	}
+}
+
+// --- ChangeColumns -----------------------------------------------------------
+
+func TestChangeColumns_Basic(t *testing.T) {
+	ch := CanonicalChange{
+		Op:     OpUpdate,
+		Table:  "t",
+		Key:    map[string]any{"id": 1},
+		Values: map[string]any{"id": 1, "name": "x"},
+	}
+	set, key := ChangeColumns(ch)
+	if len(key) != 1 || key[0] != "id" {
+		t.Fatalf("key cols = %v want [id]", key)
+	}
+	if len(set) != 1 || set[0] != "name" {
+		t.Fatalf("set cols = %v want [name]", set)
+	}
+}
+
+func TestChangeColumns_MultipleKeyAndSet(t *testing.T) {
+	ch := CanonicalChange{
+		Op:     OpUpdate,
+		Table:  "t",
+		Key:    map[string]any{"b": 2, "a": 1},
+		Values: map[string]any{"a": 1, "b": 2, "z": "v", "m": "w"},
+	}
+	set, key := ChangeColumns(ch)
+	if len(key) != 2 || key[0] != "a" || key[1] != "b" {
+		t.Fatalf("key cols = %v want [a b]", key)
+	}
+	if len(set) != 2 || set[0] != "m" || set[1] != "z" {
+		t.Fatalf("set cols = %v want [m z]", set)
+	}
+}
+
+// --- ValidateChangeKey -------------------------------------------------------
+
+func TestValidateChangeKey_InsertNoKey_OK(t *testing.T) {
+	ch := CanonicalChange{Op: OpInsert, Table: "t"}
+	if err := ValidateChangeKey(ch); err != nil {
+		t.Fatalf("INSERT with no key: got %v want nil", err)
+	}
+}
+
+func TestValidateChangeKey_UpdateNoKey_Error(t *testing.T) {
+	ch := CanonicalChange{Op: OpUpdate, Table: "orders"}
+	if err := ValidateChangeKey(ch); err == nil {
+		t.Fatal("UPDATE with no key: want error, got nil")
+	}
+}
+
+func TestValidateChangeKey_DeleteNoKey_Error(t *testing.T) {
+	ch := CanonicalChange{Op: OpDelete, Table: "orders"}
+	if err := ValidateChangeKey(ch); err == nil {
+		t.Fatal("DELETE with no key: want error, got nil")
+	}
+}
+
+func TestValidateChangeKey_UpdateWithKey_OK(t *testing.T) {
+	ch := CanonicalChange{Op: OpUpdate, Table: "t", Key: map[string]any{"id": 1}}
+	if err := ValidateChangeKey(ch); err != nil {
+		t.Fatalf("UPDATE with key: got %v want nil", err)
 	}
 }

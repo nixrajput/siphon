@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"io"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
+	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
 )
@@ -19,6 +18,19 @@ import (
 type BinlogPosition struct {
 	File     string // e.g. "mysql-bin.000123"
 	Position uint64
+}
+
+var _ driver.BasePositioner = (*Conn)(nil)
+
+// CurrentPosition returns the server's current binlog coordinates as a canonical
+// Position. app.Backup calls this right after a full backup so the base dump's
+// Envelope records where the first incremental should resume from.
+func (c *Conn) CurrentPosition(ctx context.Context) (canonical.Position, error) {
+	pos, err := c.CaptureBinlogPosition(ctx)
+	if err != nil {
+		return canonical.Position{}, err
+	}
+	return canonical.Position{BinlogFile: pos.File, BinlogPos: pos.Position}, nil
 }
 
 // CaptureBinlogPosition records the current binlog coordinates. Tries the
@@ -150,21 +162,31 @@ func binlogSSLArgs(sslMode, binlogBinary string) []string {
 	}
 }
 
-// BackupIncremental streams binlog events from `since` to current end-of-binlog
-// into w, using the fork's binlog tool (mysqlbinlog / mariadb-binlog).
+var _ driver.IncrementalBackuper = (*Conn)(nil)
+
+// BackupIncremental captures the BOUNDED change set from `since` to the current
+// end-of-binlog, serializing each CanonicalChange to w as JSONL, and returns the
+// end Position reached.
 //
-// NOTE: the --read-from-remote-server + --start-position invocation is
-// structurally complete but UNPROVEN locally (no Docker/MySQL here). The exact
-// remote-auth flags and whether a single starting binlog file suffices vs.
-// needing --to-last-log need validation against a live log_bin=ON,
-// binlog_format=ROW server (see CI / the incremental wiring task).
-func (c *Conn) BackupIncremental(ctx context.Context, since BinlogPosition, w io.Writer) error {
-	cmd := exec.CommandContext(ctx, c.binlogBinary, binlogArgs(c.p, since, c.binlogBinary)...)
-	cmd.Env = withMySQLPwd(os.Environ(), c.p.Password)
-	cmd.Stdout = w
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return &errs.Error{Op: c.binlogBinary + ".backup_incremental", Code: errs.CodeSystem, Cause: err}
+// Bounding mechanism: the end binlog coordinates are captured up front via
+// CaptureBinlogPosition and passed to the shared binlog decode loop as a stop
+// target. Parsing returns cleanly at the first "# at" marker that reaches or
+// passes the captured end offset in the end file, so every event up to it is
+// emitted and none past it. This reuses StreamChanges' decode machinery so the
+// incremental body is engine-neutral JSONL that the restore path replays via
+// ApplyChange (rather than raw binlog bytes).
+//
+// This path is exercised against a live log_bin=ON, binlog_format=ROW server only
+// in CI; it is not validated locally (no MySQL/MariaDB here).
+func (c *Conn) BackupIncremental(ctx context.Context, since canonical.Position, w io.Writer) (canonical.Position, error) {
+	end, err := c.CaptureBinlogPosition(ctx)
+	if err != nil {
+		return canonical.Position{}, err
 	}
-	return nil
+	stopAt := &BinlogPosition{File: end.File, Position: end.Position}
+
+	emit := func(ch canonical.CanonicalChange) error {
+		return canonical.WriteJSONL(w, ch)
+	}
+	return c.streamChangesWithStop(ctx, since, stopAt, emit)
 }

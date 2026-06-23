@@ -24,7 +24,7 @@ func (Driver) Name() string { return "postgres" }
 
 func (Driver) Capabilities() driver.Capabilities {
 	return driver.Capabilities{
-		Incremental:        false, // arrives in Phase F (WAL)
+		Incremental:        true, // Phase F: bounded change capture via logical decoding
 		NativeStream:       true,
 		PerTable:           true,
 		SchemaOnly:         true,
@@ -32,9 +32,9 @@ func (Driver) Capabilities() driver.Capabilities {
 		Parallel:           true, // capability exists in the engine, but not wired in Phase B: pg_dump -j needs -Fd (see backup.go) and RestoreOpts carries no Parallel field yet — both land in a later phase
 		Compression:        true,
 		BinaryFormat:       true,
-		CrossEngineSource:  false, // Phase F
-		CrossEngineTarget:  false, // Phase F
-		CDC:                false, // Phase F
+		CrossEngineSource:  true,
+		CrossEngineTarget:  true,
+		CDC:                true,
 		NativeBackpressure: true,
 	}
 }
@@ -112,5 +112,9 @@ type Conn struct {
 	db *sql.DB
 	p  driver.Profile
 }
+
+var _ driver.Conn = (*Conn)(nil)
+var _ driver.SchemaInspector = (*Conn)(nil)
+var _ driver.CanonicalTransfer = (*Conn)(nil)
 
 func (c *Conn) Close() error { return c.db.Close() }

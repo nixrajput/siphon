@@ -26,16 +26,16 @@ func (Driver) Capabilities() driver.Capabilities {
 		Parallel:           false, // mysqldump is single-threaded
 		Compression:        true,
 		BinaryFormat:       false, // SQL text dump, not a binary archive
-		CrossEngineSource:  false, // Phase F
-		CrossEngineTarget:  false, // Phase F
-		CDC:                false, // Phase F
+		CrossEngineSource:  true,
+		CrossEngineTarget:  true,
+		CDC:                true,
 		NativeBackpressure: true,
 		// CrossVersionIncremental defaults false
 	}
 }
 
 func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error) {
-	return mysqlcommon.NewConn(ctx, p, "mysqldump", "mysql", "mysqlbinlog", "mysql.connect")
+	return mysqlcommon.NewConn(ctx, p, "mysqldump", "mysql", "mysqlbinlog", "mysql.connect", "mysql")
 }
 
 // Compile-time check.

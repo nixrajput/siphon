@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/config"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/dumps"
@@ -84,6 +85,75 @@ func TestBackup_WritesDumpAndMeta(t *testing.T) {
 	}
 	if !strings.HasPrefix(got[0].Checksum, "sha256:") {
 		t.Fatalf("Checksum = %q; want sha256: prefix", got[0].Checksum)
+	}
+}
+
+// posConn is a fakeConn that also implements driver.BasePositioner, so a full
+// backup stamps the returned position into the base envelope.
+type posConn struct {
+	fakeConn
+	pos canonical.Position
+}
+
+func (c *posConn) CurrentPosition(_ context.Context) (canonical.Position, error) {
+	return c.pos, nil
+}
+
+type posDriver struct {
+	payload string
+	pos     canonical.Position
+}
+
+func (posDriver) Name() string                      { return "fake" }
+func (posDriver) Capabilities() driver.Capabilities { return driver.Capabilities{Incremental: true} }
+func (d posDriver) Connect(_ context.Context, _ driver.Profile) (driver.Conn, error) {
+	return &posConn{fakeConn: fakeConn{payload: d.payload}, pos: d.pos}, nil
+}
+
+// TestBackup_FullStampsBasePosition asserts the gap is closed: a full backup
+// whose driver implements BasePositioner records the engine position in the base
+// dump's envelope, so a later incremental's basePosition() resumes from a real
+// position instead of the zero value (which would silently drop changes between
+// the base dump and the first incremental).
+func TestBackup_FullStampsBasePosition(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SIPHON_CONFIG_HOME", t.TempDir())
+
+	cfg := &config.Config{Profiles: map[string]config.ProfileConfig{
+		"test": {Driver: "fake", Host: "h", User: "u", Database: "d", Password: "p"},
+	}}
+	res := secrets.NewResolver(secrets.Passthrough{})
+	ps := profile.New(cfg, res, func(*config.Config) error { return nil })
+	cat, _ := dumps.NewCatalog(dir)
+
+	deps := Deps{
+		Profiles: ps,
+		Dumps:    cat,
+		Runner:   jobs.NewRunner(),
+		Drivers:  fakeGetter{d: posDriver{payload: "hello-dump", pos: canonical.Position{LSN: "0/16B6358"}}},
+	}
+
+	ch, _, err := Backup(context.Background(), deps, BackupOpts{Profile: "test"})
+	if err != nil {
+		t.Fatalf("Backup: %v", err)
+	}
+	for range ch { /* drain */
+	}
+
+	got, err := cat.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("catalog.List() = %d entries; want 1", len(got))
+	}
+
+	pos, err := basePosition(deps, got[0].ID)
+	if err != nil {
+		t.Fatalf("basePosition: %v", err)
+	}
+	if pos.LSN != "0/16B6358" {
+		t.Fatalf("base envelope WALEnd = %q; want 0/16B6358 (position not stamped on full backup)", pos.LSN)
 	}
 }
 

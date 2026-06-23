@@ -6,6 +6,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/nixrajput/siphon/internal/canonical"
 )
 
 // Driver is the protocol-level abstraction for a database engine.
@@ -26,6 +28,54 @@ type Conn interface {
 	Restore(ctx context.Context, opt RestoreOpts, r io.Reader) error
 	Verify(ctx context.Context, r io.Reader) (*VerifyReport, error)
 	Close() error
+}
+
+// SchemaInspector is an optional interface a Conn may implement to expose typed
+// schema information for cross-engine transfers.
+type SchemaInspector interface {
+	InspectSchema(ctx context.Context) (*canonical.CanonicalSchema, error)
+}
+
+// CanonicalTransfer is an optional interface a Conn may implement to support
+// cross-engine data transfer via the canonical JSONL format.
+type CanonicalTransfer interface {
+	EmitCanonical(ctx context.Context, schema *canonical.CanonicalSchema, w io.Writer) error
+	ConsumeCanonical(ctx context.Context, r io.Reader) error
+	ApplyChange(ctx context.Context, ch canonical.CanonicalChange) error
+}
+
+// ChangeStreamer is an optional Conn capability: stream logical row changes as
+// engine-neutral CanonicalChanges, starting after `from`. Bounded callers cancel
+// ctx at a target end position; unbounded (CDC) callers stream until ctx cancel.
+// Returns the final Position reached (for envelope stamping / CDC state persistence).
+type ChangeStreamer interface {
+	StreamChanges(ctx context.Context, from canonical.Position, emit func(canonical.CanonicalChange) error) (canonical.Position, error)
+}
+
+// BasePositioner reports the engine's current change-stream position, captured
+// during a full backup so a later incremental knows where to resume from.
+//
+// app.Backup calls this immediately after a full backup completes and stamps the
+// result into the base dump's Envelope. basePosition() then reads a real position
+// instead of the zero value, so the first incremental off a full base resumes
+// from base-end rather than silently starting at "now" (which would drop every
+// change committed between the base dump and the first incremental run).
+type BasePositioner interface {
+	CurrentPosition(ctx context.Context) (canonical.Position, error)
+}
+
+// IncrementalBackuper is an optional Conn capability: capture the BOUNDED change
+// set from `since` to the engine's current end position, serializing each
+// CanonicalChange to w as JSONL, and return the end Position reached.
+//
+// "Bounded" means the capture stops at a fixed end position captured at the
+// start of the call (Postgres: pg_current_wal_lsn(); MySQL/MariaDB: the current
+// binlog file+offset), unlike CDC's unbounded StreamChanges. It is implemented
+// in terms of StreamChanges' decode machinery with that end position as a stop
+// target. The returned Position is stamped into the incremental dump's Envelope
+// so the NEXT incremental resumes from exactly here.
+type IncrementalBackuper interface {
+	BackupIncremental(ctx context.Context, since canonical.Position, w io.Writer) (canonical.Position, error)
 }
 
 // Capabilities describes what an engine supports. Each flag gates a UI

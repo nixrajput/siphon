@@ -2,8 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"os"
 
+	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/dumps"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -54,6 +58,22 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 			}
 			defer func() { _ = conn.Close() }()
 
+			// Preflight: if the chain contains any incremental link, the driver must
+			// support change replay (CanonicalTransfer). Assert this BEFORE applying
+			// the base — a Clean base restore wipes the target, so discovering the
+			// unsupported-driver error only when we reach the first incremental link
+			// would leave the target destroyed and the chain half-applied.
+			if chainHasIncremental(chain) {
+				if _, ok := conn.(driver.CanonicalTransfer); !ok {
+					return &errs.Error{
+						Op:    "restore",
+						Code:  errs.CodeUser,
+						Cause: errs.ErrDriverUnsupported,
+						Hint:  resolved.Driver + " cannot replay incremental change links",
+					}
+				}
+			}
+
 			for i, m := range chain {
 				emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "applying " + m.ID})
 				f, err := os.Open(d.Dumps.Path(m.ID))
@@ -78,6 +98,27 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 						Hint:  "dump was created by " + env.Driver + "; cannot restore into a " + resolved.Driver + " target",
 					}
 				}
+				// Incremental links carry a JSONL change body, not a native dump:
+				// replay each change via ApplyChange instead of conn.Restore.
+				if env.Type == dumps.EnvelopeIncremental {
+					applier, ok := conn.(driver.CanonicalTransfer)
+					if !ok {
+						_ = f.Close()
+						return &errs.Error{
+							Op:    "restore",
+							Code:  errs.CodeUser,
+							Cause: errs.ErrDriverUnsupported,
+							Hint:  resolved.Driver + " cannot replay incremental change links",
+						}
+					}
+					if err := replayChanges(ctx, applier, body); err != nil {
+						_ = f.Close()
+						return err
+					}
+					_ = f.Close()
+					continue
+				}
+
 				rOpts := driver.RestoreOpts{
 					TargetTables: opt.TargetTables,
 					SchemaOnly:   opt.SchemaOnly,
@@ -93,6 +134,43 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 			return nil
 		},
 	})
+}
+
+// chainHasIncremental reports whether any link in the resolved chain is an
+// incremental dump (one that carries a JSONL change body replayed via
+// ApplyChange). Incremental links record a non-empty ParentID in their metadata;
+// the chain root (a base or full dump) does not.
+func chainHasIncremental(chain []dumps.Meta) bool {
+	for _, m := range chain {
+		if m.ParentID != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// replayChanges decodes a JSONL stream of CanonicalChanges from r and applies
+// each to the target via ApplyChange, in order. A malformed record aborts the
+// replay so a corrupt incremental never partially applies undetected.
+//
+// A json.Decoder streams successive JSON values directly off the reader, so —
+// unlike a bufio.Scanner — there is no per-record size ceiling that would reject
+// a valid change carrying a large row value as "corrupt".
+func replayChanges(ctx context.Context, applier driver.CanonicalTransfer, r io.Reader) error {
+	dec := json.NewDecoder(r)
+	for {
+		var ch canonical.CanonicalChange
+		if err := dec.Decode(&ch); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return &errs.Error{Op: "restore.replay", Code: errs.CodeSystem, Cause: err, Hint: "incremental change body is corrupt"}
+		}
+		if err := applier.ApplyChange(ctx, ch); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // truncateChain returns chain up to and including the dump named upTo. Unlike
