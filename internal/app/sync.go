@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
 	"github.com/nixrajput/siphon/internal/jobs"
@@ -179,6 +180,10 @@ func runCrossEngineSync(parent context.Context, d Deps, opt SyncOpts) (<-chan jo
 			if err != nil {
 				return err
 			}
+			// Honor --table: native sync passes opt.Tables into Backup, so the
+			// cross-engine path must filter the canonical schema the same way or it
+			// would copy every table regardless of the requested subset.
+			schema = filterSchemaTables(schema, opt.Tables)
 
 			stream := jobs.NewStream(64)
 			errCh := make(chan error, 1)
@@ -199,4 +204,33 @@ func runCrossEngineSync(parent context.Context, d Deps, opt SyncOpts) (<-chan jo
 			return consumeErr
 		},
 	})
+}
+
+// tableAllowed reports whether table t passes a --table filter. An empty filter
+// (the default) allows every table.
+func tableAllowed(t string, filter []string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	for _, want := range filter {
+		if want == t {
+			return true
+		}
+	}
+	return false
+}
+
+// filterSchemaTables returns a schema containing only the tables that pass the
+// --table filter. An empty filter returns the schema unchanged.
+func filterSchemaTables(schema *canonical.CanonicalSchema, filter []string) *canonical.CanonicalSchema {
+	if len(filter) == 0 {
+		return schema
+	}
+	out := &canonical.CanonicalSchema{}
+	for _, t := range schema.Tables {
+		if tableAllowed(t.Name, filter) {
+			out.Tables = append(out.Tables, t)
+		}
+	}
+	return out
 }

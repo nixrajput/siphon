@@ -2,6 +2,7 @@ package mysqlcommon
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -64,7 +65,8 @@ func (c *Conn) streamChangesWithStop(ctx context.Context, from canonical.Positio
 
 	cmd := exec.CommandContext(ctx, c.binlogBinary, args...)
 	cmd.Env = withMySQLPwd(os.Environ(), c.p.Password)
-	cmd.Stderr = os.Stderr
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return canonical.Position{}, &errs.Error{Op: c.binlogBinary + ".stream", Code: errs.CodeSystem, Cause: err}
@@ -75,15 +77,40 @@ func (c *Conn) streamChangesWithStop(ctx context.Context, from canonical.Positio
 
 	endPos, parseErr := parseBinlogRows(stdout, meta, emit, since, stopAt)
 
-	// Kill the (possibly unbounded) tool and reap it. On ctx cancel — or on a
-	// bounded stop where we stopped reading before EOF — the kill is expected; we
-	// only surface a parse error, not the resulting exec error.
-	_ = cmd.Process.Kill()
-	_ = cmd.Wait()
+	// Did we stop on purpose? Either ctx was cancelled (CDC clean stop) or a
+	// bounded scan reached its target position. In both cases killing the
+	// (possibly still-running) tool is expected and its exec error is noise.
+	reachedStop := stopAt != nil && endPos.File == stopAt.File && endPos.Position >= stopAt.Position
+	intentionalStop := ctx.Err() != nil || reachedStop
+	if intentionalStop {
+		_ = cmd.Process.Kill()
+	}
+	waitErr := cmd.Wait()
 
 	final := canonical.Position{BinlogFile: endPos.File, BinlogPos: endPos.Position}
+
+	// A parse error (other than from a deliberate ctx cancel) is the primary
+	// failure and takes precedence.
 	if parseErr != nil && ctx.Err() == nil {
 		return final, parseErr
+	}
+	// The tool exited on its own with a non-zero status (bad flags, auth/binlog
+	// permission denied, missing file): without this, an early EOF would look
+	// like a clean stream with zero changes. Surface it with captured stderr.
+	if waitErr != nil && !intentionalStop {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			waitErr = errors.New(waitErr.Error() + ": " + msg)
+		}
+		return final, toolErr(c.binlogBinary, c.binlogBinary+".stream", waitErr)
+	}
+	// A bounded scan must actually reach its target; ending before stopAt (e.g.
+	// the tool exited at EOF first) means the incremental is incomplete.
+	if stopAt != nil && !reachedStop && ctx.Err() == nil {
+		return final, &errs.Error{
+			Op:    c.binlogBinary + ".stream",
+			Code:  errs.CodeSystem,
+			Cause: errors.New("binlog stream ended before reaching the requested stop position"),
+		}
 	}
 	return final, nil
 }
@@ -102,12 +129,21 @@ func reorderBinlogFileLast(args []string, file string) []string {
 	return append(out, file)
 }
 
+// colVal is a parsed column assignment value. isNull distinguishes a SQL NULL
+// (mysqlbinlog renders it as the bare token NULL) from the string literal
+// "NULL" (rendered quoted as 'NULL') — conflating them, as a plain string would,
+// turns a legitimate 'NULL' string into a nil value and corrupts data.
+type colVal struct {
+	str    string
+	isNull bool
+}
+
 // rowEvent is the in-progress decode of a single ### INSERT/UPDATE/DELETE block.
 type rowEvent struct {
 	op      canonical.ChangeOp
 	table   string // unqualified table name
-	whereM  map[int]string
-	setM    map[int]string
+	whereM  map[int]colVal
+	setM    map[int]colVal
 	section string // "where" or "set", controls which map @N= lines fill
 }
 
@@ -172,29 +208,29 @@ func parseBinlogRows(r io.Reader, meta *tableMetaCache, emit func(canonical.Cano
 			if err := flush(); err != nil {
 				return pos, err
 			}
-			ev = &rowEvent{op: canonical.OpInsert, table: tableFromRef(body[len("INSERT INTO "):]), setM: map[int]string{}, section: "set"}
+			ev = &rowEvent{op: canonical.OpInsert, table: tableFromRef(body[len("INSERT INTO "):]), setM: map[int]colVal{}, section: "set"}
 		case strings.HasPrefix(body, "DELETE FROM "):
 			if err := flush(); err != nil {
 				return pos, err
 			}
-			ev = &rowEvent{op: canonical.OpDelete, table: tableFromRef(body[len("DELETE FROM "):]), whereM: map[int]string{}, section: "where"}
+			ev = &rowEvent{op: canonical.OpDelete, table: tableFromRef(body[len("DELETE FROM "):]), whereM: map[int]colVal{}, section: "where"}
 		case strings.HasPrefix(body, "UPDATE "):
 			if err := flush(); err != nil {
 				return pos, err
 			}
-			ev = &rowEvent{op: canonical.OpUpdate, table: tableFromRef(body[len("UPDATE "):]), whereM: map[int]string{}, setM: map[int]string{}}
+			ev = &rowEvent{op: canonical.OpUpdate, table: tableFromRef(body[len("UPDATE "):]), whereM: map[int]colVal{}, setM: map[int]colVal{}}
 		case body == "WHERE":
 			if ev != nil {
 				ev.section = "where"
 				if ev.whereM == nil {
-					ev.whereM = map[int]string{}
+					ev.whereM = map[int]colVal{}
 				}
 			}
 		case body == "SET":
 			if ev != nil {
 				ev.section = "set"
 				if ev.setM == nil {
-					ev.setM = map[int]string{}
+					ev.setM = map[int]colVal{}
 				}
 			}
 		case strings.HasPrefix(body, "@"):
@@ -263,28 +299,49 @@ func tableFromRef(ref string) string {
 	return strings.Trim(ref, "`")
 }
 
-// parseColAssign parses a "@3='foo'" assignment into its 1-based column index
-// and unquoted value. Values mysqlbinlog wraps in single quotes are unquoted;
-// NULL renders as the literal NULL and maps to a nil value (returned as the
-// empty string flagged via the caller's NULL handling — here we keep "NULL"
-// literal-stripped to nil at change-build time).
-func parseColAssign(body string) (int, string, bool) {
-	// body looks like "@3=value" (mysqlbinlog) optionally with a trailing
-	// "/* ... */" type comment.
+// parseColAssign parses a "@3=value" assignment into its 1-based column index
+// and typed value. A bare NULL token is reported as a SQL NULL (isNull=true);
+// a quoted value (including 'NULL') is unquoted and reported as a string. The
+// mysqlbinlog "/* ... */" type comment is stripped only when it appears OUTSIDE
+// a quoted string, so a value like 'a /* b' keeps its literal content.
+func parseColAssign(body string) (int, colVal, bool) {
 	eq := strings.IndexByte(body, '=')
 	if eq < 0 || !strings.HasPrefix(body, "@") {
-		return 0, "", false
+		return 0, colVal{}, false
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(body[1:eq]))
 	if err != nil {
-		return 0, "", false
+		return 0, colVal{}, false
 	}
 	val := strings.TrimSpace(body[eq+1:])
-	if i := strings.Index(val, "/*"); i >= 0 { // strip mysqlbinlog type comment
-		val = strings.TrimSpace(val[:i])
+	val = stripTrailingTypeComment(val)
+	if val == "NULL" { // bare token, not quoted: a real SQL NULL
+		return n, colVal{isNull: true}, true
 	}
-	val = unquoteBinlogValue(val)
-	return n, val, true
+	return n, colVal{str: unquoteBinlogValue(val)}, true
+}
+
+// stripTrailingTypeComment removes a trailing mysqlbinlog "/* ... */" type
+// annotation, but only when the "/*" falls outside any single-quoted string.
+// Scanning quote-aware prevents truncating a quoted value that itself contains
+// the characters "/*" (e.g. 'a /* b').
+func stripTrailingTypeComment(v string) string {
+	inQuote := false
+	for i := 0; i+1 < len(v); i++ {
+		switch v[i] {
+		case '\\': // skip the escaped next byte inside a quoted string
+			if inQuote {
+				i++
+			}
+		case '\'':
+			inQuote = !inQuote
+		case '/':
+			if !inQuote && v[i+1] == '*' {
+				return strings.TrimSpace(v[:i])
+			}
+		}
+	}
+	return v
 }
 
 // unquoteBinlogValue strips the surrounding single quotes mysqlbinlog adds to
@@ -384,14 +441,18 @@ func (m *tableMetaCache) toChange(ev *rowEvent) (*canonical.CanonicalChange, err
 		}
 		return l.cols[idx1-1], true
 	}
-	toMap := func(byPos map[int]string) map[string]any {
+	toMap := func(byPos map[int]colVal) map[string]any {
 		if byPos == nil {
 			return nil
 		}
 		out := make(map[string]any, len(byPos))
 		for n, v := range byPos {
 			if name, ok := nameOf(n); ok {
-				out[name] = binlogValue(v)
+				if v.isNull {
+					out[name] = nil
+				} else {
+					out[name] = v.str
+				}
 			}
 		}
 		return out
@@ -427,12 +488,3 @@ func (m *tableMetaCache) toChange(ev *rowEvent) (*canonical.CanonicalChange, err
 	}
 }
 
-// binlogValue maps the parsed string token to a Go value. A bare NULL token
-// becomes nil; everything else stays a string (v1 keeps binlog values as text,
-// matching the snapshot path's NormalizeScanned behavior).
-func binlogValue(v string) any {
-	if v == "NULL" {
-		return nil
-	}
-	return v
-}

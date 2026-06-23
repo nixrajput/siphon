@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/nixrajput/siphon/internal/canonical"
@@ -42,9 +43,13 @@ ORDER BY table_name, ordinal_position
 			tableMap[tableName] = &canonical.CanonicalTable{Name: tableName}
 			tableOrder = append(tableOrder, tableName)
 		}
+		ctype, ok := mapPGType(dataType)
+		if !ok {
+			return nil, fmt.Errorf("cross-engine: unsupported postgres type %q on %s.%s", dataType, tableName, colName)
+		}
 		col := canonical.CanonicalColumn{
 			Name:     colName,
-			Type:     mapPGType(dataType),
+			Type:     ctype,
 			Nullable: isNullable == "YES",
 		}
 		if charMaxLen != nil {
@@ -113,28 +118,31 @@ ORDER BY tc.table_name, kcu.ordinal_position
 	return schema, nil
 }
 
-// mapPGType maps a Postgres information_schema data_type string to a CanonicalType.
-func mapPGType(dataType string) canonical.CanonicalType {
+// mapPGType maps a Postgres information_schema data_type string to a
+// CanonicalType. The bool is false for an unmapped type: the caller turns that
+// into an explicit error rather than silently coercing to text, which would
+// corrupt fidelity for binary/custom types during cross-engine transfer.
+func mapPGType(dataType string) (canonical.CanonicalType, bool) {
 	switch strings.ToLower(dataType) {
 	case "integer", "smallint":
-		return canonical.CTInt
+		return canonical.CTInt, true
 	case "bigint":
-		return canonical.CTBigInt
+		return canonical.CTBigInt, true
 	case "boolean":
-		return canonical.CTBoolean
+		return canonical.CTBoolean, true
 	case "character varying":
-		return canonical.CTVarchar
+		return canonical.CTVarchar, true
 	case "text":
-		return canonical.CTText
+		return canonical.CTText, true
 	case "numeric", "decimal":
-		return canonical.CTNumeric
+		return canonical.CTNumeric, true
 	case "uuid":
-		return canonical.CTUUID
+		return canonical.CTUUID, true
 	case "timestamp with time zone":
-		return canonical.CTTimestampTZ
+		return canonical.CTTimestampTZ, true
 	case "json", "jsonb":
-		return canonical.CTJSON
+		return canonical.CTJSON, true
 	default:
-		return canonical.CTText
+		return "", false
 	}
 }

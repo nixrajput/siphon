@@ -237,9 +237,31 @@ func runIncrementalBackup(ctx context.Context, d Deps, opt BackupOpts, resolved 
 		}
 	}
 
+	// Reject a base that does not belong to this profile/driver: an incremental
+	// chain is only meaningful against the same engine and source, and a
+	// cross-driver base would produce changes the target cannot replay.
+	if base.Driver != resolved.Driver || base.Profile != opt.Profile {
+		return &errs.Error{
+			Op:    "app.backup.incremental",
+			Code:  errs.CodeUser,
+			Cause: errs.ErrIncompatibleEngine,
+			Hint:  "base dump " + opt.BaseID + " was created for profile " + base.Profile + " (" + base.Driver + "), not " + opt.Profile + " (" + resolved.Driver + ")",
+		}
+	}
+
 	since, err := basePosition(d, opt.BaseID)
 	if err != nil {
 		return err
+	}
+	// A base with no recorded change-stream position cannot anchor an incremental;
+	// capturing from a zero cursor would silently start at "now" and drop every
+	// change committed since the base. Require a real position.
+	if since.LSN == "" && since.BinlogFile == "" {
+		return &errs.Error{
+			Op:   "app.backup.incremental",
+			Code: errs.CodeUser,
+			Hint: "base dump " + opt.BaseID + " has no recorded change-stream position; take a fresh full backup and use that as --base",
+		}
 	}
 
 	inc, ok := conn.(driver.IncrementalBackuper)

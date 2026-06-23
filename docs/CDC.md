@@ -37,7 +37,7 @@ each change to the target continuously, until interrupted. It works
      snapshot.
   3. **Stream loop:** `ChangeStreamer.StreamChanges` (unbounded) emits each
      `CanonicalChange`; `RunCDC` applies it via `CanonicalTransfer.ApplyChange`
-     on the target and checkpoints state periodically.
+     on the target and persists the streamer's delivered position on exit.
 
 The `job_id` is a stable hash of `(from, to)`, so re-running the same continuous
 sync resumes from the same state file.
@@ -90,10 +90,14 @@ $HOME/.local/state/siphon/cdc/<job-id>.state  # default
 Each file is JSON: source/target profiles plus the last applied position (LSN
 for Postgres, binlog file + offset for MySQL/MariaDB).
 
-**Checkpoint/resume granularity is "since the last checkpoint."** RunCDC
-checkpoints every 100 applied changes plus on clean exit. After a crash it
-resumes from the last checkpoint and re-applies any changes that landed after
-it. This is safe because delivery is **at-least-once** and `ApplyChange` is
+**Checkpoint/resume granularity is "since the streamer's last delivered
+position."** RunCDC persists the position the change streamer reports when the
+stream stops — a position tied to what was actually delivered, never ahead of
+it. There is deliberately **no** ahead-of-stream periodic checkpoint: writing
+the source's *current* WAL/binlog end mid-stream would, after a crash, resume
+past changes that were streamed but never applied — silent data loss. After a
+crash it resumes from the last persisted position and re-applies the tail. This
+is safe because delivery is **at-least-once** and `ApplyChange` is
 **idempotent**: INSERT is idempotent (upsert), and UPDATE/DELETE target by
 primary key. Re-applying the tail is therefore a no-op — no gaps, no duplicates.
 

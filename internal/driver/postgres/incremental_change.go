@@ -50,13 +50,15 @@ func (c *Conn) CurrentPosition(ctx context.Context) (canonical.Position, error) 
 // Bounding mechanism: the end LSN is captured up front via pg_current_wal_lsn()
 // and passed to the shared pgoutput decode loop as a stop target. The loop
 // advances its client position only AFTER decoding+emitting each XLogData
-// message, so it returns cleanly at the first message boundary where the client
-// position reaches or passes the captured end LSN — every change committed at or
-// before that LSN has been emitted, and none past it. (Once the live stream is
-// caught up, a server keepalive carries ServerWALEnd, which crosses the bound and
-// triggers the stop.) This reuses StreamChanges' decode machinery rather than
-// streaming raw WAL bytes, so the incremental body is engine-neutral JSONL that
-// the restore path replays via ApplyChange.
+// message, so every change committed at or before the bound is emitted and none
+// past it. The stop fires when either the decoded position reaches the bound OR
+// a server keepalive reports the server's WAL end has reached it (catch-up:
+// pgoutput delivers XLogData before the keepalive covering its LSN, so all
+// changes <= the bound are already emitted, and the keepalive's position is
+// tracked separately from the decoded position so it cannot truncate capture).
+// This reuses StreamChanges' decode machinery rather than streaming raw WAL
+// bytes, so the incremental body is engine-neutral JSONL that the restore path
+// replays via ApplyChange.
 //
 // Before streaming, orphaned siphon replication slots are swept (best-effort) to
 // keep WAL retention bounded.
@@ -101,7 +103,8 @@ func (c *Conn) BackupIncremental(ctx context.Context, since canonical.Position, 
 func (c *Conn) SweepOrphanSlots(ctx context.Context) (int, error) {
 	rows, err := c.db.QueryContext(ctx,
 		`SELECT slot_name FROM pg_replication_slots
-		 WHERE slot_name LIKE 'siphon\_%' AND active = false AND slot_name <> $1`, siphonSlot)
+		 WHERE slot_type = 'physical'
+		   AND slot_name LIKE 'siphon\_%' AND active = false AND slot_name <> $1`, siphonSlot)
 	if err != nil {
 		return 0, &errs.Error{Op: "postgres.sweep_slots", Code: errs.CodeSystem, Cause: err}
 	}

@@ -8,27 +8,29 @@ import (
 
 func TestMapPGType(t *testing.T) {
 	cases := []struct {
-		input string
-		want  canonical.CanonicalType
+		input  string
+		want   canonical.CanonicalType
+		wantOK bool
 	}{
-		{"integer", canonical.CTInt},
-		{"smallint", canonical.CTInt},
-		{"bigint", canonical.CTBigInt},
-		{"boolean", canonical.CTBoolean},
-		{"character varying", canonical.CTVarchar},
-		{"text", canonical.CTText},
-		{"numeric", canonical.CTNumeric},
-		{"decimal", canonical.CTNumeric},
-		{"uuid", canonical.CTUUID},
-		{"timestamp with time zone", canonical.CTTimestampTZ},
-		{"json", canonical.CTJSON},
-		{"jsonb", canonical.CTJSON},
-		{"bytea", canonical.CTText}, // fallback
+		{"integer", canonical.CTInt, true},
+		{"smallint", canonical.CTInt, true},
+		{"bigint", canonical.CTBigInt, true},
+		{"boolean", canonical.CTBoolean, true},
+		{"character varying", canonical.CTVarchar, true},
+		{"text", canonical.CTText, true},
+		{"numeric", canonical.CTNumeric, true},
+		{"decimal", canonical.CTNumeric, true},
+		{"uuid", canonical.CTUUID, true},
+		{"timestamp with time zone", canonical.CTTimestampTZ, true},
+		{"json", canonical.CTJSON, true},
+		{"jsonb", canonical.CTJSON, true},
+		{"bytea", "", false},    // unmapped: surfaces as an error, not silent text
+		{"geometry", "", false}, // unmapped custom type
 	}
 	for _, tc := range cases {
-		got := mapPGType(tc.input)
-		if got != tc.want {
-			t.Errorf("mapPGType(%q) = %q; want %q", tc.input, got, tc.want)
+		got, ok := mapPGType(tc.input)
+		if got != tc.want || ok != tc.wantOK {
+			t.Errorf("mapPGType(%q) = (%q, %v); want (%q, %v)", tc.input, got, ok, tc.want, tc.wantOK)
 		}
 	}
 }

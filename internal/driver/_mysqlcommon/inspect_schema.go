@@ -2,6 +2,7 @@ package mysqlcommon
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/nixrajput/siphon/internal/canonical"
@@ -44,9 +45,13 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION
 			tableMap[tableName] = &canonical.CanonicalTable{Name: tableName}
 			tableOrder = append(tableOrder, tableName)
 		}
+		ctype, ok := mapMySQLType(dataType, columnType)
+		if !ok {
+			return nil, fmt.Errorf("cross-engine: unsupported mysql type %q (%q) on %s.%s", dataType, columnType, tableName, colName)
+		}
 		col := canonical.CanonicalColumn{
 			Name:     colName,
-			Type:     mapMySQLType(dataType, columnType),
+			Type:     ctype,
 			Nullable: strings.EqualFold(isNullable, "YES"),
 		}
 		if charMaxLen != nil {
@@ -112,36 +117,39 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION
 }
 
 // mapMySQLType maps MySQL/MariaDB information_schema DATA_TYPE and COLUMN_TYPE
-// to a CanonicalType.
-func mapMySQLType(dataType, columnType string) canonical.CanonicalType {
+// to a CanonicalType. The bool is false for an unmapped type: the caller turns
+// that into an explicit error rather than silently coercing to text, which would
+// rewrite schema semantics for binary/BLOB families and corrupt data fidelity
+// during cross-engine transfer.
+func mapMySQLType(dataType, columnType string) (canonical.CanonicalType, bool) {
 	dt := strings.ToLower(dataType)
 	ct := strings.ToLower(columnType)
 	switch dt {
 	case "int", "smallint", "mediumint":
-		return canonical.CTInt
+		return canonical.CTInt, true
 	case "tinyint":
 		if ct == "tinyint(1)" {
-			return canonical.CTBoolean
+			return canonical.CTBoolean, true
 		}
-		return canonical.CTInt
+		return canonical.CTInt, true
 	case "bigint":
-		return canonical.CTBigInt
+		return canonical.CTBigInt, true
 	case "varchar":
-		return canonical.CTVarchar
+		return canonical.CTVarchar, true
 	case "text", "longtext", "mediumtext":
-		return canonical.CTText
+		return canonical.CTText, true
 	case "decimal":
-		return canonical.CTNumeric
+		return canonical.CTNumeric, true
 	case "char":
 		if ct == "char(36)" {
-			return canonical.CTUUID
+			return canonical.CTUUID, true
 		}
-		return canonical.CTText
+		return canonical.CTText, true
 	case "datetime", "timestamp":
-		return canonical.CTTimestampTZ
+		return canonical.CTTimestampTZ, true
 	case "json":
-		return canonical.CTJSON
+		return canonical.CTJSON, true
 	default:
-		return canonical.CTText
+		return "", false
 	}
 }

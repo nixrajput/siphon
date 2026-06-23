@@ -93,13 +93,6 @@ func cdcJobID(from, to string) string {
 	return "cdc-" + hex.EncodeToString(sum[:8])
 }
 
-// cdcCheckpointEvery bounds how many applied changes pass between resume-state
-// checkpoints. At-least-once delivery plus idempotent ApplyChange makes coarse
-// checkpointing safe: on restart we resume from the last checkpoint and re-apply
-// any changes that landed after it, which is a no-op for INSERT (idempotent),
-// UPDATE, and DELETE (both by primary key).
-const cdcCheckpointEvery = 100
-
 // RunCDC starts (or resumes) a continuous, unbounded sync: it tails the source's
 // logical change stream and applies each engine-neutral CanonicalChange to the
 // target. It works same-engine and cross-engine alike because CanonicalChange is
@@ -110,10 +103,11 @@ const cdcCheckpointEvery = 100
 // changes committed after that position. On a restart it resumes from the saved
 // position with no snapshot.
 //
-// Resume granularity is "since the last checkpoint": StreamChanges reports the
-// position reached after each applied change via the emit callback, and RunCDC
-// checkpoints every cdcCheckpointEvery changes plus on clean exit. Re-applying the
-// tail after a crash is safe (see cdcCheckpointEvery).
+// Resume granularity is "since the last clean exit": RunCDC persists the
+// streamer's returned final position when the stream stops (the position is tied
+// to what was actually delivered, never ahead of it). Re-applying the tail after
+// a crash is safe because ApplyChange is idempotent (INSERT upserts; UPDATE and
+// DELETE target by primary key).
 //
 // ctx cancellation is the normal stop signal (matching the bounded-stream
 // convention): on cancel RunCDC persists final state and returns nil; only a
@@ -187,7 +181,7 @@ func RunCDC(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, st
 				if err != nil {
 					return err
 				}
-				if snapErr := cdcSnapshot(ctx, srcConn, dstXfer, src.Driver); snapErr != nil {
+				if snapErr := cdcSnapshot(ctx, srcConn, dstXfer, src.Driver, opt.Tables); snapErr != nil {
 					return snapErr
 				}
 				state.setPosition(from)
@@ -199,6 +193,12 @@ func RunCDC(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, st
 
 			applied := 0
 			emit2 := func(ch canonical.CanonicalChange) error {
+				// Honor --table: the streamer surfaces changes for every table (the
+				// source's publication/binlog is database-wide), so skip any change
+				// outside the requested set before applying it to the target.
+				if !tableAllowed(ch.Table, opt.Tables) {
+					return nil
+				}
 				if applyErr := dstXfer.ApplyChange(ctx, ch); applyErr != nil {
 					return applyErr
 				}
@@ -207,12 +207,13 @@ func RunCDC(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, st
 					Phase:   jobs.PhaseProgress,
 					Message: fmt.Sprintf("applied %s on %s (%d total)", ch.Op, ch.Table, applied),
 				})
-				if applied%cdcCheckpointEvery == 0 {
-					if pos, posErr := srcPositioner.CurrentPosition(ctx); posErr == nil {
-						state.setPosition(pos)
-						_ = saveCDCState(state)
-					}
-				}
+				// No periodic mid-stream checkpoint here: srcPositioner.CurrentPosition
+				// returns the source's CURRENT WAL/binlog end, which is ahead of the
+				// change we just applied. Persisting it would, after a crash, resume
+				// PAST changes that streamed but were never applied — silent data loss.
+				// We checkpoint only the streamer's returned final position on exit
+				// (below), which is tied to what was actually delivered; at-least-once
+				// redelivery on resume is safe because ApplyChange is idempotent.
 				return nil
 			}
 
@@ -239,7 +240,7 @@ func RunCDC(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, st
 // the canonical transfer pipe (the same pattern as runCrossEngineSync). Both the
 // source's SchemaInspector+CanonicalTransfer and the target's CanonicalTransfer
 // are required.
-func cdcSnapshot(ctx context.Context, srcConn driver.Conn, dstXfer driver.CanonicalTransfer, srcDriverName string) error {
+func cdcSnapshot(ctx context.Context, srcConn driver.Conn, dstXfer driver.CanonicalTransfer, srcDriverName string, tables []string) error {
 	srcInsp, ok := srcConn.(driver.SchemaInspector)
 	if !ok {
 		return cdcUnsupported(srcDriverName, "SchemaInspector")
@@ -253,6 +254,9 @@ func cdcSnapshot(ctx context.Context, srcConn driver.Conn, dstXfer driver.Canoni
 	if err != nil {
 		return err
 	}
+	// Snapshot only the requested tables; the streamed-change phase applies the
+	// same filter in emit2.
+	schema = filterSchemaTables(schema, tables)
 
 	stream := jobs.NewStream(64)
 	errCh := make(chan error, 1)

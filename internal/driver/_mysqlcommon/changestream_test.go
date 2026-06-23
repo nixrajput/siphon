@@ -10,23 +10,32 @@ import (
 
 func TestParseColAssign(t *testing.T) {
 	tests := []struct {
-		body    string
-		wantN   int
-		wantVal string
-		wantOK  bool
+		body       string
+		wantN      int
+		wantStr    string
+		wantIsNull bool
+		wantOK     bool
 	}{
-		{"@1=42", 1, "42", true},
-		{"@2='wrench'", 2, "wrench", true},
-		{"@3='a''b'", 3, "a'b", true},
-		{"@4=NULL", 4, "NULL", true},
-		{"@5='x' /* VARSTRING(60) meta=60 nullable=1 is_null=0 */", 5, "x", true},
-		{"not an assign", 0, "", false},
+		{"@1=42", 1, "42", false, true},
+		{"@2='wrench'", 2, "wrench", false, true},
+		{"@3='a''b'", 3, "a'b", false, true},
+		{"@4=NULL", 4, "", true, true}, // bare token: SQL NULL
+		// A quoted 'NULL' is the string literal "NULL", NOT a SQL NULL — must not
+		// be conflated with the bare token above.
+		{"@5='NULL'", 5, "NULL", false, true},
+		// Trailing type comment is stripped (it is outside the quotes).
+		{"@6='x' /* VARSTRING(60) meta=60 nullable=1 is_null=0 */", 6, "x", false, true},
+		// A quoted value that itself contains "/*" must be preserved, not
+		// truncated at the comment-like sequence inside the string.
+		{"@7='a /* b'", 7, "a /* b", false, true},
+		{"@8='a /* b' /* TYPE meta */", 8, "a /* b", false, true},
+		{"not an assign", 0, "", false, false},
 	}
 	for _, tt := range tests {
 		n, val, ok := parseColAssign(tt.body)
-		if ok != tt.wantOK || n != tt.wantN || val != tt.wantVal {
-			t.Errorf("parseColAssign(%q) = (%d, %q, %v), want (%d, %q, %v)",
-				tt.body, n, val, ok, tt.wantN, tt.wantVal, tt.wantOK)
+		if ok != tt.wantOK || n != tt.wantN || val.str != tt.wantStr || val.isNull != tt.wantIsNull {
+			t.Errorf("parseColAssign(%q) = (%d, {str:%q isNull:%v}, %v), want (%d, {str:%q isNull:%v}, %v)",
+				tt.body, n, val.str, val.isNull, ok, tt.wantN, tt.wantStr, tt.wantIsNull, tt.wantOK)
 		}
 	}
 }
@@ -110,11 +119,39 @@ func TestParseBinlogRows(t *testing.T) {
 	}
 }
 
-func TestBinlogValueNull(t *testing.T) {
-	if binlogValue("NULL") != nil {
-		t.Error("NULL should map to nil")
+// TestParseBinlogRows_NullVsNullString proves a bare NULL token decodes to a
+// nil value while a quoted 'NULL' decodes to the string "NULL" — the two must
+// not collapse together, or a legitimate 'NULL' string would be lost.
+func TestParseBinlogRows_NullVsNullString(t *testing.T) {
+	transcript := `# at 4
+### INSERT INTO ` + "`test`.`widgets`" + `
+### SET
+###   @1=1
+###   @2=NULL
+# at 100
+### INSERT INTO ` + "`test`.`widgets`" + `
+### SET
+###   @1=2
+###   @2='NULL'
+# at 200
+`
+	meta := &tableMetaCache{cache: map[string]*tableLayout{
+		"widgets": {cols: []string{"id", "name"}, pk: map[string]bool{"id": true}},
+	}}
+
+	var got []canonical.CanonicalChange
+	emit := func(ch canonical.CanonicalChange) error { got = append(got, ch); return nil }
+
+	if _, err := parseBinlogRows(strings.NewReader(transcript), meta, emit, BinlogPosition{File: "mysql-bin.000001"}, nil); err != nil {
+		t.Fatalf("parseBinlogRows: %v", err)
 	}
-	if binlogValue("x") != "x" {
-		t.Error("non-NULL should pass through")
+	if len(got) != 2 {
+		t.Fatalf("got %d changes, want 2: %+v", len(got), got)
+	}
+	if got[0].Values["name"] != nil {
+		t.Errorf("bare NULL: name = %#v, want nil", got[0].Values["name"])
+	}
+	if got[1].Values["name"] != "NULL" {
+		t.Errorf("quoted 'NULL': name = %#v, want \"NULL\" string", got[1].Values["name"])
 	}
 }

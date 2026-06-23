@@ -1,9 +1,9 @@
 package app
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 
@@ -57,6 +57,22 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 				return err
 			}
 			defer func() { _ = conn.Close() }()
+
+			// Preflight: if the chain contains any incremental link, the driver must
+			// support change replay (CanonicalTransfer). Assert this BEFORE applying
+			// the base — a Clean base restore wipes the target, so discovering the
+			// unsupported-driver error only when we reach the first incremental link
+			// would leave the target destroyed and the chain half-applied.
+			if chainHasIncremental(chain) {
+				if _, ok := conn.(driver.CanonicalTransfer); !ok {
+					return &errs.Error{
+						Op:    "restore",
+						Code:  errs.CodeUser,
+						Cause: errs.ErrDriverUnsupported,
+						Hint:  resolved.Driver + " cannot replay incremental change links",
+					}
+				}
+			}
 
 			for i, m := range chain {
 				emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "applying " + m.ID})
@@ -120,27 +136,39 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 	})
 }
 
-// replayChanges decodes a JSONL stream of CanonicalChanges from r and applies
-// each to the target via ApplyChange, in order. A malformed line aborts the
-// replay so a corrupt incremental never partially applies undetected.
-func replayChanges(ctx context.Context, applier driver.CanonicalTransfer, r io.Reader) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
+// chainHasIncremental reports whether any link in the resolved chain is an
+// incremental dump (one that carries a JSONL change body replayed via
+// ApplyChange). Incremental links record a non-empty ParentID in their metadata;
+// the chain root (a base or full dump) does not.
+func chainHasIncremental(chain []dumps.Meta) bool {
+	for _, m := range chain {
+		if m.ParentID != "" {
+			return true
 		}
+	}
+	return false
+}
+
+// replayChanges decodes a JSONL stream of CanonicalChanges from r and applies
+// each to the target via ApplyChange, in order. A malformed record aborts the
+// replay so a corrupt incremental never partially applies undetected.
+//
+// A json.Decoder streams successive JSON values directly off the reader, so —
+// unlike a bufio.Scanner — there is no per-record size ceiling that would reject
+// a valid change carrying a large row value as "corrupt".
+func replayChanges(ctx context.Context, applier driver.CanonicalTransfer, r io.Reader) error {
+	dec := json.NewDecoder(r)
+	for {
 		var ch canonical.CanonicalChange
-		if err := json.Unmarshal(line, &ch); err != nil {
+		if err := dec.Decode(&ch); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
 			return &errs.Error{Op: "restore.replay", Code: errs.CodeSystem, Cause: err, Hint: "incremental change body is corrupt"}
 		}
 		if err := applier.ApplyChange(ctx, ch); err != nil {
 			return err
 		}
-	}
-	if err := sc.Err(); err != nil {
-		return &errs.Error{Op: "restore.replay", Code: errs.CodeSystem, Cause: err}
 	}
 	return nil
 }

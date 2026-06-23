@@ -100,6 +100,7 @@ func receiveLoop(ctx context.Context, repl *pgconn.PgConn, startLSN, stopLSN pgl
 	relations := map[uint32]*pglogrepl.RelationMessage{}
 	typeMap := pgtype.NewMap()
 	clientXLogPos := startLSN
+	var serverWALEnd pglogrepl.LSN // server's reported WAL end, from keepalives
 	nextDeadline := time.Now().Add(standbyInterval)
 
 	finalPos := func() canonical.Position { return canonical.Position{LSN: clientXLogPos.String()} }
@@ -113,11 +114,22 @@ func receiveLoop(ctx context.Context, repl *pgconn.PgConn, startLSN, stopLSN pgl
 			return finalPos(), nil
 		}
 
-		// Bounded (incremental) stop: once the client has caught up to the target
-		// end LSN, every change committed at or before it has already been decoded
-		// and emitted (XLogData advances clientXLogPos only after decodeWALData),
-		// so it is safe to ack and return the end position.
-		if stopLSN != 0 && clientXLogPos >= stopLSN {
+		// Bounded (incremental) stop. Two distinct conditions, both safe:
+		//   1. clientXLogPos >= stopLSN — we have DECODED past the bound. Every
+		//      change at or before stopLSN was emitted (clientXLogPos advances
+		//      only after decodeWALData).
+		//   2. serverWALEnd >= stopLSN — the server's keepalive reports its WAL end
+		//      has reached the bound. pgoutput delivers XLogData BEFORE the
+		//      keepalive that covers its LSN, so every change <= stopLSN has already
+		//      been decoded and emitted; the remaining gap to stopLSN is WAL with no
+		//      decodable row change (commit-record tails, padding). This is the
+		//      catch-up path: without it a stopLSN pointing just past the last
+		//      decodable record would never be reached by clientXLogPos and the loop
+		//      would spin on keepalives forever.
+		// Crucially, serverWALEnd is tracked SEPARATELY from clientXLogPos so the
+		// keepalive cannot prematurely satisfy condition 1 before the changes are
+		// decoded (that was a data-loss bug).
+		if stopLSN != 0 && (clientXLogPos >= stopLSN || serverWALEnd >= stopLSN) {
 			_ = pglogrepl.SendStandbyStatusUpdate(context.Background(), repl,
 				pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
 			return finalPos(), nil
@@ -164,8 +176,13 @@ func receiveLoop(ctx context.Context, repl *pgconn.PgConn, startLSN, stopLSN pgl
 			if err != nil {
 				return finalPos(), &errs.Error{Op: "postgres.stream", Code: errs.CodeSystem, Cause: err}
 			}
-			if pkm.ServerWALEnd > clientXLogPos {
-				clientXLogPos = pkm.ServerWALEnd
+			// Record the server's WAL end for catch-up detection ONLY — never feed
+			// it into clientXLogPos. clientXLogPos is "data this client has decoded"
+			// and advances solely after decodeWALData (XLogData case below); using
+			// ServerWALEnd there would let a keepalive satisfy the bounded stop
+			// before the changes at that LSN were emitted (a data-loss bug).
+			if pkm.ServerWALEnd > serverWALEnd {
+				serverWALEnd = pkm.ServerWALEnd
 			}
 			if pkm.ReplyRequested {
 				nextDeadline = time.Time{} // force an immediate ack next iteration

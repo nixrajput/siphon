@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nixrajput/siphon/internal/app"
+	"github.com/nixrajput/siphon/internal/errs"
 )
 
 func newCdcCmd() *cobra.Command {
@@ -23,6 +24,13 @@ func newCdcCmd() *cobra.Command {
 			}
 			if len(args) >= 2 {
 				toName = args[1]
+			}
+			if fromName == "" || toName == "" {
+				return &errs.Error{
+					Op:   "cdc",
+					Code: errs.CodeUser,
+					Hint: "cdc requires both source and target profiles (positional args or --from/--to)",
+				}
 			}
 			deps, err := buildDeps()
 			if err != nil {

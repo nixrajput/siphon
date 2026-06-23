@@ -226,6 +226,12 @@ func BuildCreateTableSQL(engine string, t CanonicalTable) (string, error) {
 // come first (1-based placeholders), then key columns. Identifiers are always
 // quoted via QuoteIdent; values are bound, not interpolated.
 func BuildUpdateSQL(engine, table string, setCols, keyCols []string) (string, error) {
+	if len(setCols) == 0 {
+		return "", fmt.Errorf("cross-engine: update %s: no columns to set", table)
+	}
+	if len(keyCols) == 0 {
+		return "", fmt.Errorf("cross-engine: update %s: no key columns", table)
+	}
 	qt, err := QuoteIdent(engine, table)
 	if err != nil {
 		return "", err
@@ -256,6 +262,9 @@ func BuildUpdateSQL(engine, table string, setCols, keyCols []string) (string, er
 // key columns in the WHERE clause. Identifiers are always quoted; values are
 // bound (1-based for Postgres, ? for MySQL/MariaDB).
 func BuildDeleteSQL(engine, table string, keyCols []string) (string, error) {
+	if len(keyCols) == 0 {
+		return "", fmt.Errorf("cross-engine: delete %s: no key columns", table)
+	}
 	qt, err := QuoteIdent(engine, table)
 	if err != nil {
 		return "", err
