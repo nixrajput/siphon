@@ -35,7 +35,10 @@ func TestLocalStore_AtomicPublish(t *testing.T) {
 		t.Error("partial object visible under final key after failed Put")
 	}
 	// And no leftover temp file should linger.
-	entries, _ := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
 	if len(entries) != 0 {
 		var names []string
 		for _, e := range entries {

@@ -122,7 +122,10 @@ func RunStoreSuite(t *testing.T, newStore func(t *testing.T) Store) {
 			t.Fatalf("Get: %v", err)
 		}
 		defer func() { _ = rc.Close() }()
-		got, _ := io.ReadAll(rc)
+		got, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("ReadAll: %v", err)
+		}
 		if string(got) != "second" {
 			t.Errorf("after overwrite got %q, want %q", got, "second")
 		}
@@ -137,7 +140,9 @@ func RunStoreSuite(t *testing.T, newStore func(t *testing.T) Store) {
 			t.Fatal("Put with cancelled context returned nil, want error")
 		}
 		// The key must NOT be visible — a cancelled Put leaves no partial object.
-		if _, exists, _ := s.Stat(ctx, "cancel.dump"); exists {
+		if _, exists, statErr := s.Stat(ctx, "cancel.dump"); statErr != nil {
+			t.Fatalf("Stat after cancelled Put: %v", statErr)
+		} else if exists {
 			t.Error("cancelled Put left a partial object visible")
 		}
 	})

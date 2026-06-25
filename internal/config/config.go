@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -41,16 +42,17 @@ type StorageConfig struct {
 // Load so a malformed storage config fails fast with a clear message rather
 // than surfacing as an obscure runtime error on first backup.
 func (s StorageConfig) Validate() error {
-	switch s.Type {
+	t := strings.TrimSpace(s.Type)
+	switch t {
 	case "", "local":
 		return nil
 	case "s3":
-		if s.Bucket == "" {
+		if strings.TrimSpace(s.Bucket) == "" {
 			return errors.New("storage.type is s3 but storage.bucket is empty")
 		}
 		return nil
 	default:
-		return fmt.Errorf("unknown storage.type %q (want \"local\" or \"s3\")", s.Type)
+		return fmt.Errorf("unknown storage.type %q (want \"local\" or \"s3\")", t)
 	}
 }
 

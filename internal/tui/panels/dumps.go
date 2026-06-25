@@ -82,7 +82,11 @@ func (p Dumps) SelectedID() string {
 
 // Reload rebuilds the rows from the catalog.
 func (p *Dumps) Reload() {
-	all, err := p.deps.Dumps.List(context.Background())
+	// Bound the catalog list: with S3 storage this is a network call, and the
+	// dashboard reload must not hang on a slow/unreachable backend.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	all, err := p.deps.Dumps.List(ctx)
 	if err != nil {
 		return
 	}

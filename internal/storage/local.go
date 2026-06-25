@@ -55,13 +55,56 @@ func (s *localStore) Put(ctx context.Context, key string, r io.Reader) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("storage.local: write %s: %w", key, err)
 	}
+	// fsync the data before publishing: the Store contract promises a durable
+	// write, and this is a backup tool — a dump that survives `Put` but is lost
+	// to a power cut defeats the purpose. Sync the file, then (below) the parent
+	// dir so the rename itself is durable.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("storage.local: sync %s: %w", key, err)
+	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("storage.local: flush %s: %w", key, err)
 	}
-	if err := os.Rename(tmpName, p); err != nil {
+	if err := atomicRename(tmpName, p); err != nil {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("storage.local: publish %s: %w", key, err)
+	}
+	if err := syncDir(s.root); err != nil {
+		return fmt.Errorf("storage.local: sync dir for %s: %w", key, err)
+	}
+	return nil
+}
+
+// atomicRename renames src→dst, replacing dst if it exists. os.Rename already
+// replaces an existing destination on Unix; on Windows it can fail when the
+// destination exists, so retry after removing dst there. (Go's Windows rename
+// uses MOVEFILE_REPLACE_EXISTING and usually succeeds, but the remove-retry is
+// cheap insurance for the Store contract's overwrite guarantee across
+// filesystems.)
+func atomicRename(src, dst string) error {
+	if err := os.Rename(src, dst); err != nil {
+		if removeErr := os.Remove(dst); removeErr == nil || os.IsNotExist(removeErr) {
+			return os.Rename(src, dst)
+		}
+		return err
+	}
+	return nil
+}
+
+// syncDir fsyncs a directory so a rename into it is durable across a crash. A
+// directory that cannot be opened or synced (some platforms/filesystems reject
+// directory fsync) is tolerated — the data file itself was already synced.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return nil //nolint:nilerr // best-effort dir sync; data fsync already done
+	}
+	defer func() { _ = d.Close() }()
+	if err := d.Sync(); err != nil {
+		return nil //nolint:nilerr // some filesystems reject dir fsync; tolerate it
 	}
 	return nil
 }

@@ -135,7 +135,15 @@ func (c *Catalog) List(ctx context.Context) ([]Meta, error) {
 		id := strings.TrimSuffix(k, metaSuffix)
 		m, err := c.ReadMeta(ctx, id)
 		if err != nil {
-			continue // skip corrupt entries; user can prune later
+			// Skip only a corrupt/missing user entry (the user can prune it
+			// later). A system error — a backend failure or a cancelled context —
+			// must propagate, or List would return partial results as success and
+			// silently hide an outage or an aborted run.
+			var e *errs.Error
+			if errors.As(err, &e) && e.Code == errs.CodeUser {
+				continue
+			}
+			return nil, err
 		}
 		out = append(out, *m)
 	}
@@ -149,10 +157,14 @@ func (c *Catalog) Delete(ctx context.Context, id string) error {
 	if err := validID(id); err != nil {
 		return err
 	}
-	if err := c.store.Delete(ctx, dumpKey(id)); err != nil {
+	// Delete meta FIRST. The catalog enumerates by meta, so if the second delete
+	// fails the worst case is an invisible orphan body (prunable) rather than a
+	// catalog entry that lists a dump whose body is already gone. This mirrors
+	// the write path, which writes meta last for the same invariant.
+	if err := c.store.Delete(ctx, metaKey(id)); err != nil {
 		return &errs.Error{Op: "dumps.delete", Code: errs.CodeSystem, Cause: err}
 	}
-	if err := c.store.Delete(ctx, metaKey(id)); err != nil {
+	if err := c.store.Delete(ctx, dumpKey(id)); err != nil {
 		return &errs.Error{Op: "dumps.delete", Code: errs.CodeSystem, Cause: err}
 	}
 	return nil

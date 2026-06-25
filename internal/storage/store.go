@@ -15,7 +15,8 @@ import (
 	"io"
 )
 
-// ErrNotFound is returned by Get/Stat/Delete when the requested key is absent.
+// ErrNotFound is returned by Get when the requested key is absent. (Delete and
+// Stat treat a missing key as a non-error — see their contracts below.)
 // Backends MUST wrap their native "no such object" error with this sentinel
 // (via fmt.Errorf("...: %w", ErrNotFound) or by returning it directly) so the
 // catalog and app layers can distinguish "you asked for something that isn't
