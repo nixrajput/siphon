@@ -64,6 +64,20 @@ func TestGate_Require2FA(t *testing.T) {
 	}
 }
 
+func TestGate_ConfirmAndRequire2FA_SharedReader(t *testing.T) {
+	// Both gates enabled: the name and the TOTP code arrive on one piped stdin
+	// ("prod\n<code>\n"). A single shared reader must not swallow the code while
+	// reading the name (the bug a per-prompt reader would cause).
+	secret := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte("12345678901234567890"))
+	cfg := gateCfg(config.GroupConfig{ConfirmDestructive: true, Require2FA: true, TOTPSecret: secret})
+	now := time.Unix(20_000, 0)
+	code := totpAt(t, secret, now)
+
+	if err := newGate(cfg, "prod\n"+code+"\n", now).Authorize(context.Background(), audit.OpRestore, "prod"); err != nil {
+		t.Errorf("scripted name+code rejected (reader split the input?): %v", err)
+	}
+}
+
 func TestGate_Require2FA_MissingSecret(t *testing.T) {
 	cfg := gateCfg(config.GroupConfig{Require2FA: true}) // no TOTPSecret
 	if err := newGate(cfg, "123456\n", time.Now()).Authorize(context.Background(), audit.OpSync, "prod"); err == nil {

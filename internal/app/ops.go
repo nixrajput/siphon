@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/nixrajput/siphon/internal/audit"
+	"github.com/nixrajput/siphon/internal/jobs"
 )
 
 // guardedOp is the single interception point wrapping every destructive verb.
@@ -28,4 +29,17 @@ func guardedOp(ctx context.Context, d Deps, op audit.Op, profile, target string)
 		Actor:   d.Actor,
 	})
 	return rec, nil
+}
+
+// launchGuarded runs a job whose Func already defers done(retErr) on completion,
+// and finalizes the audit record if the launch ITSELF fails synchronously
+// (Runner.Run cannot today, but the signature allows it, and an open record must
+// not leak). On a launch error it calls done and returns the error.
+func launchGuarded(r *jobs.Runner, parent context.Context, done func(error), j jobs.Job) (<-chan jobs.Event, string, error) {
+	ch, id, err := r.Run(parent, j)
+	if err != nil {
+		done(err)
+		return nil, "", err
+	}
+	return ch, id, nil
 }

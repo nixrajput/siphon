@@ -53,7 +53,7 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 		return nil, "", err
 	}
 
-	return d.Runner.Run(parent, jobs.Job{
+	return launchGuarded(d.Runner, parent, done, jobs.Job{
 		Stage: "restore",
 		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
 			defer func() { done(retErr) }()

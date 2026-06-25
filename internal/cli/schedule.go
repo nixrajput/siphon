@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,6 +58,12 @@ func scheduleAddCmd() *cobra.Command {
 			if strings.TrimSpace(cron) == "" {
 				return &errs.Error{Op: "schedule.add", Code: errs.CodeUser, Hint: "--cron is required (e.g. --cron \"0 2 * * *\")"}
 			}
+			// The managed-block parser round-trips standard 5-field expressions
+			// only; reject @daily / 6-field specs up front so an entry can't be
+			// installed and then vanish from list/remove.
+			if len(strings.Fields(cron)) != 5 {
+				return &errs.Error{Op: "schedule.add", Code: errs.CodeUser, Hint: "--cron must be a standard 5-field cron expression (e.g. \"0 2 * * *\")"}
+			}
 			bin, err := os.Executable()
 			if err != nil {
 				bin = "siphon" // fall back to PATH lookup at cron time
@@ -104,12 +111,16 @@ func scheduleRemoveCmd() *cobra.Command {
 func readCrontab() (string, error) {
 	out, err := exec.Command("crontab", "-l").Output()
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && strings.Contains(strings.ToLower(string(ee.Stderr)), "no crontab") {
-			return "", nil
-		}
-		// An empty crontab also commonly exits 1 with empty output; tolerate it.
-		if len(out) == 0 {
-			return "", nil
+		// Only the known "no crontab for user" path means empty. An ExitError
+		// with code 1 and no stdout is cron's empty-table signal on most
+		// platforms; any other failure (missing binary, permission) propagates so
+		// `schedule list` never reports an empty schedule that masks a real error.
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			stderr := strings.ToLower(string(ee.Stderr))
+			if strings.Contains(stderr, "no crontab") || (ee.ExitCode() == 1 && len(out) == 0) {
+				return "", nil
+			}
 		}
 		return "", &errs.Error{Op: "schedule", Code: errs.CodeSystem, Cause: err, Hint: "could not read crontab (is the `crontab` command available?)"}
 	}

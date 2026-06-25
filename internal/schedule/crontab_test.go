@@ -22,9 +22,25 @@ func TestAddListRoundTrip(t *testing.T) {
 	if entries[1].Profile != "staging" || entries[1].Cron != "30 3 * * *" {
 		t.Errorf("entries[1] = %+v, want staging / 30 3 * * *", entries[1])
 	}
-	// The rendered crontab actually invokes siphon backup.
-	if !strings.Contains(tab, bin+" backup prod") {
+	// The rendered crontab actually invokes siphon backup (args are shell-quoted).
+	if !strings.Contains(tab, "'"+bin+"' backup 'prod'") {
 		t.Errorf("crontab missing backup invocation:\n%s", tab)
+	}
+}
+
+func TestRenderShellQuotesArgs(t *testing.T) {
+	// A profile name (or bin path) containing a space or quote must be quoted so
+	// it stays one argv element and cannot inject into the cron command.
+	tab := Add("", "/opt/my tools/siphon", Entry{Profile: "weird'; rm -rf /", Cron: "0 0 * * *"})
+	// The dangerous content must appear only inside single quotes, with the inner
+	// quote escaped — never as a bare token that sh would re-parse.
+	if !strings.Contains(tab, `'/opt/my tools/siphon' backup 'weird'\''; rm -rf /'`) {
+		t.Errorf("args not safely shell-quoted:\n%s", tab)
+	}
+	// And it still round-trips through List (the metadata comment carries the raw
+	// profile, so List recovers it regardless of quoting).
+	if got := List(tab); len(got) != 1 || got[0].Profile != "weird'; rm -rf /" {
+		t.Errorf("List did not recover the raw profile: %+v", got)
 	}
 }
 

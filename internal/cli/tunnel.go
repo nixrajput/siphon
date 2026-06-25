@@ -41,6 +41,15 @@ func newTunnelCmd() *cobra.Command {
 			if localPort == 0 {
 				localPort = prof.Port
 			}
+			// Validate ports before building the forward spec, so an invalid value
+			// gives a clear user error instead of a bogus address and an opaque ssh
+			// failure.
+			if !validPort(prof.Port) {
+				return &errs.Error{Op: "tunnel", Code: errs.CodeUser, Hint: fmt.Sprintf("profile %s has an invalid database port %d", args[0], prof.Port)}
+			}
+			if !validPort(localPort) {
+				return &errs.Error{Op: "tunnel", Code: errs.CodeUser, Hint: fmt.Sprintf("invalid local_port %d (must be 1-65535)", localPort)}
+			}
 			sshArgs := tunnelArgs(localPort, prof.Host, prof.Port, prof.Tunnel.Bastion)
 
 			_, _ = fmt.Fprintf(c.OutOrStdout(),
@@ -50,14 +59,20 @@ func newTunnelCmd() *cobra.Command {
 			cmd := exec.CommandContext(c.Context(), "ssh", sshArgs...)
 			cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, c.OutOrStdout(), c.ErrOrStderr()
 			if err := cmd.Run(); err != nil {
-				// A clean Ctrl-C (ssh exits non-zero on signal) is the normal stop,
-				// not an error worth a non-zero siphon exit beyond ssh's own.
+				// Ctrl-C is the normal close: the command context is cancelled and
+				// ssh exits on the signal. Treat that as success, not a failure.
+				if c.Context().Err() != nil {
+					return nil
+				}
 				return &errs.Error{Op: "tunnel", Code: errs.CodeSystem, Cause: err, Hint: "ssh tunnel exited"}
 			}
 			return nil
 		},
 	}
 }
+
+// validPort reports whether p is a usable TCP port.
+func validPort(p int) bool { return p > 0 && p <= 65535 }
 
 // tunnelArgs builds the `ssh` argument list for a local forward. Pure and
 // testable: -N (no remote command), -L localPort:dbHost:dbPort, then the

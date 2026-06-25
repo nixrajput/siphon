@@ -65,14 +65,17 @@ func (h *recHandle) End(err error) {
 	if err != nil {
 		st.Errors++
 	}
-	snapshot := h.r.snapshotLocked()
-	h.r.mu.Unlock()
-
+	// Flush under the lock so concurrent End calls write to disk in the same order
+	// they updated the counters — otherwise a slower goroutine holding an older
+	// snapshot could land last and regress the file. In-memory counters are always
+	// correct; this keeps the persisted JSON monotonic too.
+	//
 	// Duration is not on the audit.Event at this layer (the handle does not see
 	// it), so telemetry tracks counts/errors only; duration aggregation would
 	// require the End signature to carry it. Counts + error rate are the useful
 	// opt-in signal and keep the seam unchanged.
-	h.r.flush(snapshot)
+	h.r.flush(h.r.snapshotLocked())
+	h.r.mu.Unlock()
 }
 
 // snapshotLocked builds a serializable copy under the held lock.

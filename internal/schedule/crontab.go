@@ -29,10 +29,17 @@ type Entry struct {
 
 // Render produces the crontab line(s) for an entry: a metadata comment (so List
 // can recover the profile) followed by the cron line invoking siphon. bin is the
-// siphon binary path to invoke.
+// siphon binary path. The binary path and profile are single-quoted so a space
+// or shell metacharacter cannot break or alter the command cron runs via sh -c.
 func (e Entry) render(bin string) string {
 	return fmt.Sprintf("%s %s\n%s %s backup %s",
-		linePrefix, e.Profile, e.Cron, bin, e.Profile)
+		linePrefix, e.Profile, e.Cron, shellQuote(bin), shellQuote(e.Profile))
+}
+
+// shellQuote wraps s in single quotes, escaping any embedded single quote, so it
+// is a single safe argv element for /bin/sh.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // List extracts the siphon-managed entries from a crontab's text. Entries

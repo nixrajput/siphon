@@ -88,6 +88,12 @@ Entries outside the siphon-managed block are preserved. Re-adding a profile
 updates its schedule in place; removing the last entry drops the managed block.
 Requires the `crontab` command.
 
+> **Gating caveat:** a scheduled job runs `siphon backup <profile>` non-interactively
+> under cron. If the profile's group sets `confirm_destructive` or `require_2fa`,
+> that backup will block waiting for input it can never receive and the cron job
+> will fail. Don't schedule backups for gated profiles (a non-interactive bypass
+> for trusted automation is a future enhancement).
+
 ## SSH tunnel
 
 `siphon tunnel <profile>` opens an SSH local-forward to a profile's database
