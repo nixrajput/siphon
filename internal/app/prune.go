@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/dumps"
 )
 
@@ -45,8 +46,16 @@ type PruneResult struct {
 // are removed before the base, so an interrupted prune leaves at worst a
 // complete shorter chain — never a base missing under a surviving incremental.
 func Prune(ctx context.Context, d Deps, opt PruneOpts) (*PruneResult, error) {
+	done, err := guardedOp(ctx, d, audit.OpPrune, opt.Profile, "")
+	if err != nil {
+		return nil, err
+	}
+	var retErr error
+	defer func() { done(retErr) }()
+
 	all, err := d.Dumps.List(ctx)
 	if err != nil {
+		retErr = err
 		return nil, err
 	}
 	// Scope to the requested profile before grouping, so chains and the plan

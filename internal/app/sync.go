@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -59,9 +60,15 @@ func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, stri
 		return runCrossEngineSync(parent, d, opt)
 	}
 
+	done, err := guardedOp(parent, d, audit.OpSync, opt.From, opt.To)
+	if err != nil {
+		return nil, "", err
+	}
+
 	return d.Runner.Run(parent, jobs.Job{
 		Stage: "sync",
-		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
+			defer func() { done(retErr) }()
 			srcConn, err := srcDrv.Connect(ctx, src)
 			if err != nil {
 				return err

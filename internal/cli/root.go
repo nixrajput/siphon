@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nixrajput/siphon/internal/app"
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/config"
 	"github.com/nixrajput/siphon/internal/dumps"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -80,12 +82,46 @@ func buildDeps() (app.Deps, error) {
 	}
 	cat := dumps.New(store)
 
+	auditor, err := buildAuditor(cfg)
+	if err != nil {
+		return app.Deps{}, err
+	}
+
 	return app.Deps{
 		Profiles: ps,
 		Dumps:    cat,
 		Runner:   jobs.NewRunner(),
 		Drivers:  app.DefaultDrivers(),
+		Auditor:  auditor,
+		Actor:    osUser(),
 	}, nil
+}
+
+// buildAuditor returns a file-backed Auditor when audit logging is enabled in
+// config, else nil (a nil Auditor is a no-op). Path defaults to the XDG state
+// dir when unset.
+func buildAuditor(cfg *config.Config) (audit.Auditor, error) {
+	if !cfg.Audit.Enabled {
+		return nil, nil
+	}
+	path := cfg.Audit.Path
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve home dir for default audit path: %w", err)
+		}
+		path = filepath.Join(home, ".local", "state", "siphon", "audit.log")
+	}
+	return audit.NewFileAuditor(path, nil)
+}
+
+// osUser returns the current OS username for audit attribution, falling back to
+// "unknown" when it cannot be determined.
+func osUser() string {
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	return "unknown"
 }
 
 // buildStore selects the dump-catalog storage backend from config. Type "s3"

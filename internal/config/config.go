@@ -15,8 +15,16 @@ type Config struct {
 	Version  int                      `yaml:"version"`
 	Defaults Defaults                 `yaml:"defaults"`
 	Storage  StorageConfig            `yaml:"storage"`
+	Audit    AuditConfig              `yaml:"audit"`
 	Profiles map[string]ProfileConfig `yaml:"profiles"`
 	Groups   map[string]GroupConfig   `yaml:"groups"`
+}
+
+// AuditConfig controls the append-only audit log of destructive operations.
+// Disabled by default; Path defaults to <state>/siphon/audit.log when empty.
+type AuditConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path,omitempty"`
 }
 
 type Defaults struct {
