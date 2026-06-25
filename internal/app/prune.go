@@ -78,16 +78,19 @@ func Prune(ctx context.Context, d Deps, opt PruneOpts) (*PruneResult, error) {
 }
 
 // applyChainDeletion deletes a pruned chain's members leaf-inward (incrementals
-// before the base). A per-dump failure is collected and does not abort the rest
-// of the chain or the run — a single stuck object should not block reclaiming
-// the others.
+// before the base) and STOPS at the first failure within the chain. Stopping is
+// the invariant: if a leaf delete fails (its meta may be gone but the dump still
+// catalogued), continuing to delete its ancestors would orphan that leaf —
+// exactly what the chain-aware design prevents. Aborting the chain leaves a
+// complete, still-restorable prefix. Other chains are unaffected; the failure is
+// recorded and the run continues with them.
 func applyChainDeletion(ctx context.Context, d Deps, ch dumps.Chain, oc *ChainOutcome, result *PruneResult) {
 	for i := len(ch.Members) - 1; i >= 0; i-- {
 		m := ch.Members[i]
 		if err := d.Dumps.Delete(ctx, m.ID); err != nil {
 			oc.Errors = append(oc.Errors, m.ID+": "+err.Error())
 			result.Failed++
-			continue
+			return // do not delete this member's ancestors — would orphan it
 		}
 		oc.Deleted = append(oc.Deleted, m.ID)
 		result.Reclaimed += m.SizeBytes

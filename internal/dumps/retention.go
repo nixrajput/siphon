@@ -66,8 +66,14 @@ type RetentionPlan struct {
 // backup (BaseID == ID, or legacy empty BaseID) is a singleton chain; its
 // incrementals attach to it via their BaseID. A dump whose root is missing from
 // the set anchors its own chain rather than being dropped, so a partially
-// present catalog never loses entries silently. Within each chain, members are
-// ordered by Created (base first).
+// present catalog never loses entries silently.
+//
+// Within each chain, members are ordered by ParentID/BaseID TOPOLOGY (base
+// first, then each child after its parent), with Created only as a tie-breaker.
+// This is the contract the leaf-inward delete path relies on: deleting members
+// last-to-first must remove every descendant before its ancestor. Ordering by
+// Created alone would break that on tied or skewed timestamps — a child could
+// sort ahead of its parent and the base could be deleted while a leaf survives.
 func GroupChains(dumps []Meta) []Chain {
 	byRoot := map[string][]Meta{}
 	for _, m := range dumps {
@@ -79,16 +85,86 @@ func GroupChains(dumps []Meta) []Chain {
 	}
 	chains := make([]Chain, 0, len(byRoot))
 	for root, members := range byRoot {
-		sort.SliceStable(members, func(i, j int) bool {
-			return members[i].Created.Before(members[j].Created)
-		})
-		chains = append(chains, Chain{Root: root, Members: members})
+		chains = append(chains, Chain{Root: root, Members: orderMembers(root, members)})
 	}
-	// Deterministic order: newest chain (by newest member) first.
+	// Deterministic order: newest chain first, Root breaking ties so the plan is
+	// reproducible across runs even when timestamps collide (map iteration is
+	// randomized; a destructive planner must not be).
 	sort.SliceStable(chains, func(i, j int) bool {
-		return chains[i].newest().After(chains[j].newest())
+		ti, tj := chains[i].newest(), chains[j].newest()
+		if ti.Equal(tj) {
+			return chains[i].Root < chains[j].Root
+		}
+		return ti.After(tj)
 	})
 	return chains
+}
+
+// orderMembers returns a chain's members in topological apply order: the base
+// (root) first, then each incremental placed immediately it can be (its parent
+// already emitted). Created breaks ties among siblings and gives a stable order.
+// Any members left unplaceable by broken/cyclic ParentID links are appended in
+// Created order so nothing is dropped — a corrupt chain still surfaces all its
+// dumps for the caller to handle.
+func orderMembers(root string, members []Meta) []Meta {
+	// Stable Created order first, so ties resolve deterministically.
+	sort.SliceStable(members, func(i, j int) bool {
+		if members[i].Created.Equal(members[j].Created) {
+			return members[i].ID < members[j].ID
+		}
+		return members[i].Created.Before(members[j].Created)
+	})
+
+	byID := make(map[string]Meta, len(members))
+	for _, m := range members {
+		byID[m.ID] = m
+	}
+
+	ordered := make([]Meta, 0, len(members))
+	emitted := make(map[string]bool, len(members))
+
+	// Emit the base first if present (its ID == root, or it self-roots / is a
+	// legacy empty-BaseID full backup).
+	if base, ok := byID[root]; ok {
+		ordered = append(ordered, base)
+		emitted[base.ID] = true
+	}
+
+	// attachable reports whether m can be emitted now: its parent is already
+	// emitted, or its parent is not part of this chain (absent/self/empty), in
+	// which case it attaches at the root level. The base itself is handled above.
+	attachable := func(m Meta) bool {
+		if m.ID == root {
+			return false // already emitted (or will be appended as a straggler)
+		}
+		p := m.ParentID
+		return p == "" || p == m.ID || emitted[p] || byID[p].ID == ""
+	}
+
+	// Iterate to a fixed point; members are Created-sorted, so each pass emits the
+	// earliest now-attachable child.
+	for {
+		progressed := false
+		for _, m := range members {
+			if emitted[m.ID] || !attachable(m) {
+				continue
+			}
+			ordered = append(ordered, m)
+			emitted[m.ID] = true
+			progressed = true
+		}
+		if !progressed {
+			break
+		}
+	}
+
+	// Append any stragglers (cycles) in Created order — never drop a member.
+	for _, m := range members {
+		if !emitted[m.ID] {
+			ordered = append(ordered, m)
+		}
+	}
+	return ordered
 }
 
 // Plan decides which chains to keep vs prune under p, as of now. It is pure: no
@@ -99,10 +175,16 @@ func Plan(chains []Chain, p RetentionPolicy, now time.Time) RetentionPlan {
 		return RetentionPlan{Keep: append([]Chain(nil), chains...)}
 	}
 
-	// chains is already sorted newest-first by GroupChains; copy defensively.
+	// chains is already sorted newest-first by GroupChains; copy and re-sort with
+	// the SAME deterministic comparator (Root breaks ties) so callers that build
+	// a Chain slice by hand still get reproducible keep_last / GFS selection.
 	ordered := append([]Chain(nil), chains...)
 	sort.SliceStable(ordered, func(i, j int) bool {
-		return ordered[i].newest().After(ordered[j].newest())
+		ti, tj := ordered[i].newest(), ordered[j].newest()
+		if ti.Equal(tj) {
+			return ordered[i].Root < ordered[j].Root
+		}
+		return ti.After(tj)
 	})
 
 	keep := map[string]bool{} // union of every active rule's keep set

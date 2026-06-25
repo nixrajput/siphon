@@ -59,8 +59,15 @@ func (r *RetentionConfig) Validate() error {
 		return errors.New("retention.gfs tiers must be >= 0")
 	}
 	if r.MaxAge != "" {
-		if _, err := time.ParseDuration(r.MaxAge); err != nil {
+		d, err := time.ParseDuration(r.MaxAge)
+		if err != nil {
 			return fmt.Errorf("retention.max_age %q is not a valid duration: %w", r.MaxAge, err)
+		}
+		// time.ParseDuration accepts signed inputs ("-1h"); a negative max-age
+		// would push the cutoff into the future and make the whole catalog
+		// eligible for deletion, so reject it.
+		if d < 0 {
+			return fmt.Errorf("retention.max_age must be >= 0, got %q", r.MaxAge)
 		}
 	}
 	return nil

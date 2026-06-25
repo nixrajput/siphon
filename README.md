@@ -181,7 +181,7 @@ storage:
 
 Credentials are resolved from the standard AWS chain (env vars, `~/.aws`, instance role) — never stored in the config file. See [docs/STORAGE.md](docs/STORAGE.md) for details.
 
-A `retention:` block (default + optional per-profile override) drives `siphon prune`, which deletes old backups as whole chains so an incremental is never orphaned:
+A `retention:` block (default + optional per-profile override) drives `siphon dumps prune`, which deletes old backups as whole chains so an incremental is never orphaned:
 
 ```yaml
 defaults:
@@ -191,7 +191,7 @@ defaults:
     gfs: { daily: 7, weekly: 4, monthly: 6 }
 ```
 
-`siphon prune` is dry-run by default; pass `--apply` to delete. Flags override the configured policy per run. See [docs/RETENTION.md](docs/RETENTION.md) for details.
+`siphon dumps prune` is dry-run by default; pass `--apply` to delete. Flags override the configured policy per run. See [docs/RETENTION.md](docs/RETENTION.md) for details.
 
 ## Architecture
 

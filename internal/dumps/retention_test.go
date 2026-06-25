@@ -58,6 +58,71 @@ func TestGroupChains(t *testing.T) {
 			t.Fatalf("orphan grouping = %+v, want one chain rooted at missingbase", chains)
 		}
 	})
+
+	t.Run("members ordered by topology, not Created, on tied timestamps", func(t *testing.T) {
+		// Base and incremental share the SAME Created time (clock skew / coarse
+		// granularity). Topological order MUST still put the base first, because
+		// the leaf-inward delete path deletes last-to-first and would otherwise
+		// remove the base before its surviving child.
+		same := daysAgo(2)
+		ds := []Meta{
+			dump("inc", "p", same, "base", "base"), // listed first, same timestamp
+			dump("base", "p", same, "base", ""),
+		}
+		chains := GroupChains(ds)
+		if len(chains) != 1 {
+			t.Fatalf("got %d chains, want 1", len(chains))
+		}
+		got := chains[0].Members
+		if len(got) != 2 || got[0].ID != "base" || got[1].ID != "inc" {
+			t.Errorf("member order = [%s %s], want [base inc] (base first despite tie)", got[0].ID, got[1].ID)
+		}
+	})
+
+	t.Run("members topologically ordered when a child predates its parent", func(t *testing.T) {
+		// Pathological: the incremental's Created is BEFORE the base's (skew).
+		// Topology must still win — base first.
+		ds := []Meta{
+			dump("base", "p", daysAgo(1), "base", ""),
+			dump("inc", "p", daysAgo(5), "base", "base"), // older than its base
+		}
+		chains := GroupChains(ds)
+		got := chains[0].Members
+		if got[0].ID != "base" {
+			t.Errorf("member order = [%s ...], want base first despite older child", got[0].ID)
+		}
+	})
+}
+
+func TestGroupChains_DeterministicOnTiedChainTimestamps(t *testing.T) {
+	// Two independent chains with identical newest() timestamps must sort in a
+	// stable order (by Root) across runs — a destructive planner cannot depend on
+	// randomized map iteration. Run the grouping repeatedly and assert identical
+	// output.
+	same := daysAgo(3)
+	ds := []Meta{
+		dump("zzz", "p", same, "", ""),
+		dump("aaa", "p", same, "", ""),
+		dump("mmm", "p", same, "", ""),
+	}
+	first := roots(GroupChains(ds))
+	for i := 0; i < 20; i++ {
+		if got := roots(GroupChains(ds)); !equalStrings(got, first) {
+			t.Fatalf("non-deterministic chain order: run %d = %v, first = %v", i, got, first)
+		}
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestPlan_EmptyPolicyKeepsEverything(t *testing.T) {

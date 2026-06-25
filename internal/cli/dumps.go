@@ -100,6 +100,13 @@ func dumpsPruneCmd() *cobra.Command {
 			if gfsMSet {
 				policy.GFS.Monthly = gfsMonthly
 			}
+			// Config-backed policy is validated at load; flag overrides bypass that,
+			// so reject negatives here too before a destructive run sees an
+			// undefined policy.
+			if policy.KeepLast < 0 || policy.MaxAge < 0 ||
+				policy.GFS.Daily < 0 || policy.GFS.Weekly < 0 || policy.GFS.Monthly < 0 {
+				return &errs.Error{Op: "prune", Code: errs.CodeUser, Hint: "retention values must be non-negative"}
+			}
 
 			deps, err := buildDeps()
 			if err != nil {
@@ -169,7 +176,13 @@ func renderPruneResult(w io.Writer, res *app.PruneResult) {
 			continue
 		}
 		prunedChains++
-		_, _ = fmt.Fprintf(w, "%s chain %s (%d dump(s), %d bytes)\n", verb, oc.Root, len(oc.DumpIDs), oc.SizeBytes)
+		// On apply, a chain with errors was only partially deleted (the delete
+		// aborted leaf-inward at the failure), so don't label it fully "pruned".
+		label := verb
+		if res.Apply && len(oc.Errors) > 0 {
+			label = "partially pruned"
+		}
+		_, _ = fmt.Fprintf(w, "%s chain %s (%d dump(s), %d bytes)\n", label, oc.Root, len(oc.DumpIDs), oc.SizeBytes)
 		for _, e := range oc.Errors {
 			_, _ = fmt.Fprintf(w, "  ! %s\n", e)
 		}

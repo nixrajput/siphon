@@ -193,6 +193,36 @@ func TestPrune_CollectsDeletionFailures(t *testing.T) {
 	}
 }
 
+// TestPrune_StopsChainOnFirstFailure proves the orphan-prevention invariant:
+// when deleting the leaf incremental of a pruned chain fails, the prune must NOT
+// proceed to delete the base — otherwise the surviving leaf is orphaned.
+func TestPrune_StopsChainOnFirstFailure(t *testing.T) {
+	store := newRecordingStore()
+	cat := dumps.New(store)
+	old := time.Now().AddDate(0, 0, -40)
+	seedDump(t, cat, "base", "p", old, "base", "")
+	seedDump(t, cat, "inc", "p", old.Add(time.Hour), "base", "base")
+	// The leaf (inc) is deleted first (leaf-inward). Make its meta delete fail —
+	// Catalog.Delete removes meta first, so this is the first Delete call.
+	store.failKeys["inc.meta.json"] = true
+
+	res, err := Prune(context.Background(), pruneDeps(store), PruneOpts{
+		Policy: dumps.RetentionPolicy{MaxAge: time.Hour}, Apply: true,
+	})
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if res.Failed != 1 {
+		t.Errorf("Failed = %d, want 1", res.Failed)
+	}
+	// The base must NOT have been deleted — neither its meta nor its body.
+	for _, k := range store.deletes {
+		if strings.HasPrefix(k, "base") {
+			t.Errorf("base was deleted after leaf failure (orphans the leaf): deletes=%v", store.deletes)
+		}
+	}
+}
+
 // helpers
 
 func firstIndexWithPrefix(s []string, p string) int {

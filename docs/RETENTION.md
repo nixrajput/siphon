@@ -1,6 +1,6 @@
 # Retention & pruning
 
-`siphon prune` applies a retention policy to the dump catalog, deleting old
+`siphon dumps prune` applies a retention policy to the dump catalog, deleting old
 backups while guaranteeing it never orphans an incremental from its base. It
 works against any storage backend (local or S3), since it prunes through the
 same `Store.Delete` the catalog already uses.
@@ -70,13 +70,13 @@ duration) fails fast at config load.
 
 ```bash
 # Dry-run (default): show which chains the policy would prune, for one profile.
-siphon prune --profile prod
+siphon dumps prune --profile prod
 
 # Override the configured policy for this run, then actually delete.
-siphon prune --profile prod --keep-last 14 --apply
+siphon dumps prune --profile prod --keep-last 14 --apply
 
 # Pure flag-driven policy (no config), GFS only.
-siphon prune --gfs-daily 7 --gfs-weekly 4 --gfs-monthly 6 --apply
+siphon dumps prune --gfs-daily 7 --gfs-weekly 4 --gfs-monthly 6 --apply
 ```
 
 `--apply` performs deletions; without it, prune only prints the plan. Flags
