@@ -57,6 +57,12 @@ linters:
             - pkg: "github.com/nixrajput/siphon/internal/app"
               desc: "Drivers must not depend on Application — dependency flows down"
   exclusions:
+    # web/ is the Next.js site; its node_modules can vendor stray .go files
+    # (e.g. flatted/golang) that are not siphon code. Keep the Go linters off
+    # the JS subtree. (node_modules is gitignored, so CI never sees it on a
+    # fresh checkout; this keeps local lint consistent with CI.)
+    paths:
+      - web
     rules:
       - path: _test\.go
         linters:
