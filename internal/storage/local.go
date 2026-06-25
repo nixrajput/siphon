@@ -2,8 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,19 +81,23 @@ func (s *localStore) Put(ctx context.Context, key string, r io.Reader) error {
 }
 
 // atomicRename renames src→dst, replacing dst if it exists. os.Rename already
-// replaces an existing destination on Unix; on Windows it can fail when the
-// destination exists, so retry after removing dst there. (Go's Windows rename
-// uses MOVEFILE_REPLACE_EXISTING and usually succeeds, but the remove-retry is
-// cheap insurance for the Store contract's overwrite guarantee across
-// filesystems.)
+// replaces an existing destination on Unix; on Windows/some filesystems it can
+// fail specifically because dst exists, so in THAT case only we remove dst and
+// retry. The guard is deliberately narrow: removing dst on an unrelated error
+// (transient I/O, permissions, device busy) would destroy the last good copy of
+// the dump and still fail — worse than the rename failure itself.
 func atomicRename(src, dst string) error {
-	if err := os.Rename(src, dst); err != nil {
-		if removeErr := os.Remove(dst); removeErr == nil || os.IsNotExist(removeErr) {
-			return os.Rename(src, dst)
-		}
-		return err
+	err := os.Rename(src, dst)
+	if err == nil {
+		return nil
 	}
-	return nil
+	if !errors.Is(err, fs.ErrExist) {
+		return err // not a "destination exists" failure — do NOT touch dst
+	}
+	if removeErr := os.Remove(dst); removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
+		return err // could not clear dst; surface the original rename error
+	}
+	return os.Rename(src, dst)
 }
 
 // syncDir fsyncs a directory so a rename into it is durable across a crash. A

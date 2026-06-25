@@ -64,6 +64,32 @@ func TestLocalStore_KeyLayout(t *testing.T) {
 	}
 }
 
+// TestAtomicRename_PreservesDstOnUnrelatedError proves the narrow guard: when a
+// rename fails for a reason OTHER than "destination exists" (here, a missing
+// source → ErrNotExist), atomicRename must NOT delete the existing destination.
+// The earlier broad "remove dst on any error" would have destroyed the last
+// good copy of a dump on a transient glitch.
+func TestAtomicRename_PreservesDstOnUnrelatedError(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "good.dump")
+	if err := os.WriteFile(dst, []byte("the only good copy"), 0o600); err != nil {
+		t.Fatalf("seed dst: %v", err)
+	}
+	missingSrc := filepath.Join(dir, "does-not-exist.tmp")
+
+	if err := atomicRename(missingSrc, dst); err == nil {
+		t.Fatal("atomicRename with missing source returned nil, want error")
+	}
+	// The existing destination must still be intact.
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("dst was destroyed by a failed rename: %v", err)
+	}
+	if string(got) != "the only good copy" {
+		t.Errorf("dst content = %q, want it untouched", got)
+	}
+}
+
 // failingReader returns `after` bytes then a non-EOF error, simulating a body
 // source that dies mid-stream.
 type failingReader struct {
