@@ -1,0 +1,46 @@
+name: Release
+
+# Fires on a version tag (e.g. v1.0.0). GoReleaser builds the cross-platform
+# binaries, checksums, and cosign-keyless signatures, publishes a GitHub
+# Release, and — when the tap repos + tokens exist — pushes the Homebrew
+# formula and Scoop manifest.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # cosign keyless signing via GitHub OIDC
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # GoReleaser needs full history + tags for the changelog
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tap-push tokens. These secrets may be unset on early releases; a
+          # GitHub Actions secret expression yields "" when absent, so the
+          # GoReleaser token template still resolves and skip_upload: auto
+          # quietly skips the brew/scoop push instead of erroring. Provision
+          # these (PATs with repo scope on the tap repos) to enable publishing.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          SCOOP_TAP_GITHUB_TOKEN: ${{ secrets.SCOOP_TAP_GITHUB_TOKEN }}
