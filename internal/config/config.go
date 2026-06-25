@@ -132,6 +132,10 @@ type GroupConfig struct {
 	Color              string `yaml:"color"`
 	Require2FA         bool   `yaml:"require_2fa"`
 	ConfirmDestructive bool   `yaml:"confirm_destructive"`
+	// TOTPSecret is the base32 RFC-6238 secret shared with the operator's
+	// authenticator app, consulted when Require2FA is set. It is a secret-ref
+	// (e.g. env:SIPHON_PROD_TOTP), so the plaintext secret never lives in config.
+	TOTPSecret string `yaml:"totp_secret,omitempty"`
 }
 
 // Load reads and parses the config file. Returns an empty Config if the

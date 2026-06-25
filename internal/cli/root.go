@@ -93,8 +93,21 @@ func buildDeps() (app.Deps, error) {
 		Runner:   jobs.NewRunner(),
 		Drivers:  app.DefaultDrivers(),
 		Auditor:  auditor,
+		Gate:     buildGate(cfg, res),
 		Actor:    osUser(),
 	}, nil
+}
+
+// buildGate returns a prompting Gate when any group enforces a destructive-op
+// policy (confirm_destructive or require_2fa), else nil (no gating). It prompts
+// on stdin and reports on stderr so prompts don't pollute piped stdout.
+func buildGate(cfg *config.Config, res *secrets.Resolver) app.Gate {
+	for _, grp := range cfg.Groups {
+		if grp.ConfirmDestructive || grp.Require2FA {
+			return newPromptGate(cfg, res, os.Stdin, os.Stderr)
+		}
+	}
+	return nil
 }
 
 // buildAuditor returns a file-backed Auditor when audit logging is enabled in
