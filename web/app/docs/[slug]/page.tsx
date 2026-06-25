@@ -26,8 +26,8 @@ export default async function DocPage({
   const doc = getDoc(slug);
   if (!doc) notFound();
   return (
-    <main>
+    <article className="prose">
       <Markdown content={doc.content} />
-    </main>
+    </article>
   );
 }

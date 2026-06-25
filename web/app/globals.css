@@ -1,3 +1,198 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── siphon design system ───────────────────────────────────────────────
+   Thesis: "the pipe." siphon moves data through a conduit, so the visual
+   language is plumbing/flow — a deep slate base (the fluid world, not generic
+   near-black), a two-tone teal→cyan "liquid flow" accent used only on
+   connective elements, and amber reserved for the single install action.
+   Monospace is the structural voice (eyebrows, labels, data) because in this
+   product's world it is the native tongue.
+*/
+:root {
+  --ink: #0e1726;
+  --ink-2: #16223a;
+  --ink-3: #1d2c49;
+  --flow: #38e0c8;
+  --flow-2: #4aa8ff;
+  --amber: #f6b73c;
+  --paper: #e8eef6;
+  --muted: #7e8ca3;
+  --line: #25324d;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo,
+    Consolas, monospace;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+  }
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--flow);
+  }
+  a {
+    color: var(--flow);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--flow);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+/* The signature: a thin teal→cyan rule that runs down the page like data
+   moving through a siphon. The dash animates downward; reduced-motion stills it. */
+@keyframes flow-down {
+  to {
+    background-position: 0 -200px;
+  }
+}
+.flowline {
+  width: 2px;
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    var(--flow) 18%,
+    var(--flow-2) 50%,
+    var(--flow) 82%,
+    transparent
+  );
+  background-size: 2px 200px;
+  animation: flow-down 6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flowline {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Docs prose: render the repo Markdown legibly on the dark base. */
+.prose {
+  max-width: 46rem;
+  line-height: 1.7;
+  color: var(--paper);
+}
+.prose h1 {
+  font-size: 2rem;
+  margin: 0 0 1rem;
+}
+.prose h2 {
+  font-size: 1.4rem;
+  margin: 2.4rem 0 0.8rem;
+}
+.prose h3 {
+  font-size: 1.1rem;
+  margin: 1.8rem 0 0.6rem;
+  color: var(--flow);
+}
+.prose p,
+.prose li {
+  color: #c4d0e0;
+}
+.prose a {
+  color: var(--flow-2);
+}
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose pre {
+  background: #0a111e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.2rem 0;
+}
+.prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2rem 0;
+  font-size: 0.9rem;
+  display: block;
+  overflow-x: auto;
+}
+.prose th,
+.prose td {
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+.prose th {
+  background: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.prose blockquote {
+  border-left: 2px solid var(--amber);
+  margin: 1.2rem 0;
+  padding: 0.2rem 0 0.2rem 1rem;
+  color: var(--muted);
+}
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2rem 0;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: var(--flow);
+}
+.hljs-string,
+.hljs-attr {
+  color: var(--amber);
+}
+.hljs-comment {
+  color: var(--muted);
+  font-style: italic;
+}
+.hljs-number,
+.hljs-literal {
+  color: var(--flow-2);
+}
