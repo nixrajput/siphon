@@ -46,6 +46,7 @@ func TestAWSSM_Errors(t *testing.T) {
 		"missing field":      "awssm://prod/db#username",
 		"non-json with #key": "awssm://lit#k", // lit isn't seeded → not found actually; see below
 		"empty ref":          "awssm://",
+		"empty # selector":   "awssm://prod/db#", // must reject, not return whole secret
 	}
 	// Seed a non-JSON secret so the #key-on-non-json path is exercised distinctly.
 	a.client = fakeSM{values: map[string]string{"prod/db": `{"password":"x"}`, "lit": "not-json"}}

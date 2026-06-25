@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -65,12 +66,23 @@ func (a *AWSSM) Resolve(ref string) (string, error) {
 	secretID, jsonKey := rest, ""
 	if i := strings.IndexByte(rest, '#'); i >= 0 {
 		secretID, jsonKey = rest[:i], rest[i+1:]
+		if jsonKey == "" {
+			// "awssm://id#" — an empty selector silently means "whole secret",
+			// changing the ref's meaning. Reject it as malformed instead.
+			return "", &errs.Error{Op: "secrets.awssm.resolve", Code: errs.CodeUser, Cause: errors.New("awssm: ref has empty json key"), Hint: "use awssm://<secret-id>#<json-key> or drop the #"}
+		}
 	}
 	if secretID == "" {
 		return "", &errs.Error{Op: "secrets.awssm.resolve", Code: errs.CodeUser, Cause: errors.New("awssm: empty secret id"), Hint: "use awssm://<secret-id>"}
 	}
 
-	out, err := a.client.GetSecretValue(context.Background(), &secretsmanager.GetSecretValueInput{
+	// The Backend.Resolve seam is contextless (a Phase-A interface; threading a
+	// context through it touches every backend + profile resolution + every
+	// verb — a separate refactor). Bound the one call that does network I/O here
+	// so an unreachable Secrets Manager can't hang resolution indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := a.client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretID),
 	})
 	if err != nil {

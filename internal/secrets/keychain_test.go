@@ -41,7 +41,9 @@ func TestKeychain_NotFoundIsUserError(t *testing.T) {
 
 func TestKeychain_BadRef(t *testing.T) {
 	keyring.MockInit()
-	for _, ref := range []string{"keychain://", "keychain://svc/"} {
+	// keychain:///acct has an empty service and must be rejected, not silently
+	// looked up under service "".
+	for _, ref := range []string{"keychain://", "keychain://svc/", "keychain:///acct"} {
 		if _, err := (Keychain{}).Resolve(ref); err == nil {
 			t.Errorf("Resolve(%q) = nil, want error", ref)
 		}

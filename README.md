@@ -42,7 +42,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 - **Native, not reimplemented.** siphon shells out to `pg_dump`/`pg_restore`, `mysqldump`/`mysql`, and `mariadb-dump`/`mariadb` for the actual data movement — you inherit 20+ years of correctness from the official tools, wrapped in a consistent UX.
 - **Integrity by default.** Every dump is checksummed (SHA-256) and recorded in a sidecar metadata file. `siphon verify` re-hashes the dump and flags corruption or tampering — and fails with a distinct exit code so CI can catch it.
 - **Built for scripts and humans.** A Cobra command tree with predictable flags and POSIX exit codes for automation; an interactive Bubble Tea dashboard when you invoke `siphon` bare.
-- **Named profiles + secret refs.** Store connection details once; reference secrets as `env:VAR`, `keychain://<name>` (OS credential store), or `awssm://<id>#<key>` (AWS Secrets Manager) — resolved at runtime so plaintext passwords never live in your config.
+- **Named profiles + secret refs.** Store connection details once; with a secret ref like `env:VAR`, `keychain://<account>` (OS credential store), or `awssm://<id>#<key>` (AWS Secrets Manager), the password is resolved at runtime instead of being stored in config. (A value with no scheme is a literal, so don't commit a plaintext password.)
 - **Streaming sync.** `siphon sync src dst` pipes a backup straight into a restore with no intermediate file on disk.
 
 ## Project status
@@ -166,7 +166,7 @@ profiles:
     sslmode: require
 ```
 
-Secret references are resolved at runtime, so the config file is safe to commit. Supported schemes: `env:VAR` (environment variable), `keychain://<account>` or `keychain://<service>/<account>` (OS keychain — macOS Keychain / Windows Credential Manager / Linux Secret Service), and `awssm://<secret-id>` or `awssm://<secret-id>#<json-key>` (AWS Secrets Manager; enable with `secrets.awssm: true`). A value matching no scheme is treated as a literal. See [docs/OPS.md](docs/OPS.md#secret-backends).
+Secret references are resolved at runtime, which keeps the password out of the config file when you use one. Supported schemes: `env:VAR` (environment variable), `keychain://<account>` or `keychain://<service>/<account>` (OS keychain — macOS Keychain / Windows Credential Manager / Linux Secret Service), and `awssm://<secret-id>` or `awssm://<secret-id>#<json-key>` (AWS Secrets Manager; enable with `secrets.awssm: true`). A value matching no scheme is treated as a literal — so a plaintext password lives in the file and should not be committed. See [docs/OPS.md](docs/OPS.md#secret-backends).
 
 By default the dump catalog lives on local disk at `defaults.dump_dir`. To store dumps in an S3 / S3-compatible bucket instead, add a `storage:` block:
 

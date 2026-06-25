@@ -40,6 +40,16 @@ func (Keychain) Resolve(ref string) (string, error) {
 	if i := strings.IndexByte(rest, '/'); i >= 0 {
 		service, account = rest[:i], rest[i+1:]
 	}
+	if service == "" {
+		// "keychain:///acct" → empty service; would call keyring.Get("", "acct"),
+		// making malformed input backend-dependent. Reject it as a bad ref.
+		return "", &errs.Error{
+			Op:    "secrets.keychain.resolve",
+			Code:  errs.CodeUser,
+			Cause: errors.New("keychain: ref missing service"),
+			Hint:  "use keychain://<account> or keychain://<service>/<account>",
+		}
+	}
 	if account == "" {
 		return "", &errs.Error{
 			Op:    "secrets.keychain.resolve",
