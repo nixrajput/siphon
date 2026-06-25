@@ -74,7 +74,10 @@ func buildDeps() (app.Deps, error) {
 	if err != nil {
 		return app.Deps{}, err
 	}
-	res := secrets.NewResolver(secrets.Env{}, secrets.Passthrough{})
+	res, err := buildResolver(cfg)
+	if err != nil {
+		return app.Deps{}, err
+	}
 	ps := profile.New(cfg, res, config.Save)
 
 	store, err := buildStore(cfg)
@@ -164,6 +167,23 @@ func osUser() string {
 		return u.Username
 	}
 	return "unknown"
+}
+
+// buildResolver assembles the secret-resolution backends. env: and keychain://
+// are always available; awssm:// is added only when enabled in config (its
+// construction loads AWS config). Passthrough MUST stay last — it is the
+// fallback that returns a literal cleartext value when no scheme matches.
+func buildResolver(cfg *config.Config) (*secrets.Resolver, error) {
+	backends := []secrets.Backend{secrets.Env{}, secrets.Keychain{}}
+	if cfg.Secrets.AWSSM {
+		sm, err := secrets.NewAWSSM(context.Background(), cfg.Secrets.AWSSMRegion)
+		if err != nil {
+			return nil, fmt.Errorf("init aws secrets manager backend: %w", err)
+		}
+		backends = append(backends, sm)
+	}
+	backends = append(backends, secrets.Passthrough{})
+	return secrets.NewResolver(backends...), nil
 }
 
 // buildStore selects the dump-catalog storage backend from config. Type "s3"
