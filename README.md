@@ -55,7 +55,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 | **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide                                                                                                                                                                                                                                                         | ✅ Complete |
 | **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness                                                                                                                                                                                                                                                             | ✅ Complete |
 | **F** — Advanced transfer         | All four advanced-transfer modes work end-to-end: bounded-buffer streaming sync; **incremental** backup/restore (`backup --incremental --base <id>` captures a bounded change set via Postgres logical decoding / MySQL-MariaDB binlog, `restore` replays the base→incremental chain, Postgres orphan-slot sweep); **cross-engine** sync (`sync --cross-engine` — typed `SchemaInspector` introspection → canonical type-mapping, e.g. Postgres → MySQL); and **CDC** (`siphon cdc` / `sync --continuous` — unbounded change streaming with snapshot→stream handoff, resumable, same- and cross-engine). Live DB paths are integration-tested in CI — see [docs/INCREMENTAL.md](docs/INCREMENTAL.md), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md), [docs/CDC.md](docs/CDC.md) | ✅ Complete |
-| **G** — Ops features              | **Cloud storage** ships first: the dump catalog can live in an S3 / S3-compatible bucket via a pluggable `storage.Store` backend (local + S3 today; GCS/Azure are a fast-follow), selected by a `storage:` config block, with SHA-256 integrity preserved end-to-end — see [docs/STORAGE.md](docs/STORAGE.md). Secret backends, profile groups + 2FA, team mode, audit log, retention, and telemetry follow in later G cycles.                                                                                                                                                                                                                                                                                                              | 🟡 In progress |
+| **G** — Ops features              | **Cloud storage** (✅): the dump catalog can live in an S3 / S3-compatible bucket via a pluggable `storage.Store` backend (local + S3; GCS/Azure are a fast-follow), `storage:` config block, SHA-256 integrity end-to-end — see [docs/STORAGE.md](docs/STORAGE.md). **Retention** (✅): chain-aware pruning (`siphon prune`) with keep-last-N / max-age / GFS rules, per-profile `retention:` config, dry-run by default — never orphans an incremental's base; see [docs/RETENTION.md](docs/RETENTION.md). Secret backends, profile groups + 2FA, team mode, audit log, and telemetry follow in later G cycles.                                                                                                                                                                                                                                                              | 🟡 In progress |
 | **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                                                                                                                                                                                                                                                                                       | ⏳ Planned  |
 
 ## Requirements
@@ -180,6 +180,18 @@ storage:
 ```
 
 Credentials are resolved from the standard AWS chain (env vars, `~/.aws`, instance role) — never stored in the config file. See [docs/STORAGE.md](docs/STORAGE.md) for details.
+
+A `retention:` block (default + optional per-profile override) drives `siphon prune`, which deletes old backups as whole chains so an incremental is never orphaned:
+
+```yaml
+defaults:
+  retention:
+    keep_last: 7
+    max_age: 720h            # 30 days
+    gfs: { daily: 7, weekly: 4, monthly: 6 }
+```
+
+`siphon prune` is dry-run by default; pass `--apply` to delete. Flags override the configured policy per run. See [docs/RETENTION.md](docs/RETENTION.md) for details.
 
 ## Architecture
 

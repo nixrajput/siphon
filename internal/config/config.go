@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,10 +20,50 @@ type Config struct {
 }
 
 type Defaults struct {
-	DumpDir       string `yaml:"dump_dir"`
-	Jobs          int    `yaml:"jobs"`
-	Compression   int    `yaml:"compression"`
-	SecretBackend string `yaml:"secret_backend"`
+	DumpDir       string           `yaml:"dump_dir"`
+	Jobs          int              `yaml:"jobs"`
+	Compression   int              `yaml:"compression"`
+	SecretBackend string           `yaml:"secret_backend"`
+	Retention     *RetentionConfig `yaml:"retention,omitempty"`
+}
+
+// RetentionConfig is the YAML shape of a retention policy. It lives in config
+// (not dumps) so config stays a leaf; the app layer maps it to a
+// dumps.RetentionPolicy. A nil pointer (block omitted) means "keep everything".
+// A profile's retention block REPLACES the defaults block wholesale — it is not
+// field-merged — so a profile's policy is read as a single coherent rule set.
+type RetentionConfig struct {
+	KeepLast int       `yaml:"keep_last,omitempty"` // keep the N newest chains
+	MaxAge   string    `yaml:"max_age,omitempty"`   // Go duration string, e.g. "720h"
+	GFS      GFSConfig `yaml:"gfs,omitempty"`       // grandfather-father-son tiers
+}
+
+// GFSConfig is the YAML shape of a grandfather-father-son rule.
+type GFSConfig struct {
+	Daily   int `yaml:"daily,omitempty"`
+	Weekly  int `yaml:"weekly,omitempty"`
+	Monthly int `yaml:"monthly,omitempty"`
+}
+
+// Validate rejects nonsensical retention settings (negative counts, an
+// unparseable duration). An all-zero policy is valid and means "keep
+// everything", so an empty or misconfigured block can never wipe the catalog.
+func (r *RetentionConfig) Validate() error {
+	if r == nil {
+		return nil
+	}
+	if r.KeepLast < 0 {
+		return fmt.Errorf("retention.keep_last must be >= 0, got %d", r.KeepLast)
+	}
+	if r.GFS.Daily < 0 || r.GFS.Weekly < 0 || r.GFS.Monthly < 0 {
+		return errors.New("retention.gfs tiers must be >= 0")
+	}
+	if r.MaxAge != "" {
+		if _, err := time.ParseDuration(r.MaxAge); err != nil {
+			return fmt.Errorf("retention.max_age %q is not a valid duration: %w", r.MaxAge, err)
+		}
+	}
+	return nil
 }
 
 // StorageConfig selects where the dump catalog physically lives. Type "local"
@@ -60,15 +101,16 @@ func (s StorageConfig) Validate() error {
 // Name is NOT read from YAML — it is populated by Load() from the map key
 // in Config.Profiles so callers don't need to thread the name separately.
 type ProfileConfig struct {
-	Name     string `yaml:"-"`
-	Driver   string `yaml:"driver"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"` // may be a SecretRef like ${VAR} or keychain://...
-	Database string `yaml:"database"`
-	SSLMode  string `yaml:"sslmode"`
-	Group    string `yaml:"group"`
+	Name      string           `yaml:"-"`
+	Driver    string           `yaml:"driver"`
+	Host      string           `yaml:"host"`
+	Port      int              `yaml:"port"`
+	User      string           `yaml:"user"`
+	Password  string           `yaml:"password"` // may be a SecretRef like ${VAR} or keychain://...
+	Database  string           `yaml:"database"`
+	SSLMode   string           `yaml:"sslmode"`
+	Group     string           `yaml:"group"`
+	Retention *RetentionConfig `yaml:"retention,omitempty"` // overrides Defaults.Retention wholesale
 }
 
 type GroupConfig struct {
@@ -116,8 +158,26 @@ func Load() (*Config, error) {
 	if err := cfg.Storage.Validate(); err != nil {
 		return nil, fmt.Errorf("config storage: %w", err)
 	}
+	if err := cfg.Defaults.Retention.Validate(); err != nil {
+		return nil, fmt.Errorf("config defaults.retention: %w", err)
+	}
+	for name, p := range cfg.Profiles {
+		if err := p.Retention.Validate(); err != nil {
+			return nil, fmt.Errorf("config profile %q retention: %w", name, err)
+		}
+	}
 
 	return cfg, nil
+}
+
+// EffectiveRetention returns the RetentionConfig for a profile: its own block if
+// present, else the defaults block, else nil (keep everything). The profile
+// block replaces the defaults wholesale — it is not merged.
+func (c *Config) EffectiveRetention(profile string) *RetentionConfig {
+	if p, ok := c.Profiles[profile]; ok && p.Retention != nil {
+		return p.Retention
+	}
+	return c.Defaults.Retention
 }
 
 // Save writes cfg to the configured Path, creating directories as needed.
