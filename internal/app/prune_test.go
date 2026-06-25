@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/dumps"
 	"github.com/nixrajput/siphon/internal/jobs"
 )
@@ -220,6 +221,65 @@ func TestPrune_StopsChainOnFirstFailure(t *testing.T) {
 		if strings.HasPrefix(k, "base") {
 			t.Errorf("base was deleted after leaf failure (orphans the leaf): deletes=%v", store.deletes)
 		}
+	}
+}
+
+// fakeAuditor records the events it sees, and the outcome passed to End.
+type fakeAuditor struct {
+	begun []audit.Event
+	ended []error
+}
+
+func (a *fakeAuditor) Begin(_ context.Context, ev audit.Event) audit.Handle {
+	a.begun = append(a.begun, ev)
+	return &fakeHandle{a: a}
+}
+
+type fakeHandle struct{ a *fakeAuditor }
+
+func (h *fakeHandle) End(err error) { h.a.ended = append(h.a.ended, err) }
+
+// blockGate denies every operation.
+type blockGate struct{ err error }
+
+func (g blockGate) Authorize(_ context.Context, _ audit.Op, _ string) error { return g.err }
+
+func TestPrune_AuditsTheOperation(t *testing.T) {
+	store := newRecordingStore()
+	cat := dumps.New(store)
+	seedDump(t, cat, "a", "p", time.Now(), "", "")
+	a := &fakeAuditor{}
+	deps := Deps{Dumps: cat, Runner: jobs.NewRunner(), Auditor: a, Actor: "alice"}
+
+	if _, err := Prune(context.Background(), deps, PruneOpts{Policy: dumps.RetentionPolicy{KeepLast: 1}}); err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if len(a.begun) != 1 || a.begun[0].Op != audit.OpPrune || a.begun[0].Actor != "alice" {
+		t.Fatalf("audit Begin = %+v, want one prune by alice", a.begun)
+	}
+	if len(a.ended) != 1 || a.ended[0] != nil {
+		t.Errorf("audit End = %v, want one nil (success)", a.ended)
+	}
+}
+
+func TestPrune_GateBlocksAndIsNotAudited(t *testing.T) {
+	store := newRecordingStore()
+	cat := dumps.New(store)
+	seedDump(t, cat, "a", "p", time.Now(), "", "")
+	a := &fakeAuditor{}
+	denied := errors.New("2FA required")
+	deps := Deps{Dumps: cat, Runner: jobs.NewRunner(), Auditor: a, Gate: blockGate{err: denied}}
+
+	_, err := Prune(context.Background(), deps, PruneOpts{Policy: dumps.RetentionPolicy{KeepLast: 1}, Apply: true})
+	if !errors.Is(err, denied) {
+		t.Fatalf("Prune err = %v, want the gate's denial", err)
+	}
+	// Blocked before running: nothing deleted, and no audit Begin (the op never started).
+	if len(store.deletes) != 0 {
+		t.Errorf("gate-blocked prune still deleted: %v", store.deletes)
+	}
+	if len(a.begun) != 0 {
+		t.Errorf("gate-blocked op was audited as begun: %+v", a.begun)
 	}
 }
 

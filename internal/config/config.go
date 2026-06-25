@@ -12,11 +12,28 @@ import (
 )
 
 type Config struct {
-	Version  int                      `yaml:"version"`
-	Defaults Defaults                 `yaml:"defaults"`
-	Storage  StorageConfig            `yaml:"storage"`
-	Profiles map[string]ProfileConfig `yaml:"profiles"`
-	Groups   map[string]GroupConfig   `yaml:"groups"`
+	Version   int                      `yaml:"version"`
+	Defaults  Defaults                 `yaml:"defaults"`
+	Storage   StorageConfig            `yaml:"storage"`
+	Audit     AuditConfig              `yaml:"audit"`
+	Telemetry TelemetryConfig          `yaml:"telemetry"`
+	Profiles  map[string]ProfileConfig `yaml:"profiles"`
+	Groups    map[string]GroupConfig   `yaml:"groups"`
+}
+
+// AuditConfig controls the append-only audit log of destructive operations.
+// Disabled by default; Path defaults to <state>/siphon/audit.log when empty.
+type AuditConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path,omitempty"`
+}
+
+// TelemetryConfig controls opt-in aggregate operational metrics (per-op counts
+// and error tallies — never identifying data). Disabled by default; Path
+// defaults to <state>/siphon/telemetry.json when empty.
+type TelemetryConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path,omitempty"`
 }
 
 type Defaults struct {
@@ -118,12 +135,27 @@ type ProfileConfig struct {
 	SSLMode   string           `yaml:"sslmode"`
 	Group     string           `yaml:"group"`
 	Retention *RetentionConfig `yaml:"retention,omitempty"` // overrides Defaults.Retention wholesale
+	Tunnel    *TunnelConfig    `yaml:"tunnel,omitempty"`    // optional SSH bastion for reaching this DB
+}
+
+// TunnelConfig describes an SSH bastion through which this profile's database is
+// reached. `siphon tunnel <profile>` opens an `ssh -L` local forward from
+// LocalPort to the profile's Host:Port via Bastion, using the system ssh client
+// (so the user's ssh config, keys, and agent apply). It is delegation, not a
+// reimplementation of SSH.
+type TunnelConfig struct {
+	Bastion   string `yaml:"bastion"`              // [user@]host[:port] of the SSH jump host
+	LocalPort int    `yaml:"local_port,omitempty"` // local forward port (defaults to the DB port)
 }
 
 type GroupConfig struct {
 	Color              string `yaml:"color"`
 	Require2FA         bool   `yaml:"require_2fa"`
 	ConfirmDestructive bool   `yaml:"confirm_destructive"`
+	// TOTPSecret is the base32 RFC-6238 secret shared with the operator's
+	// authenticator app, consulted when Require2FA is set. It is a secret-ref
+	// (e.g. env:SIPHON_PROD_TOTP), so the plaintext secret never lives in config.
+	TOTPSecret string `yaml:"totp_secret,omitempty"`
 }
 
 // Load reads and parses the config file. Returns an empty Config if the

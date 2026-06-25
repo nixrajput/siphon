@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -34,6 +35,9 @@ type SyncOpts struct {
 // is capability-gated and uses driver.SchemaInspector + driver.CanonicalTransfer
 // for typed cross-engine snapshot transfer.
 func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, string, error) {
+	// CDC is a standalone verb (also invoked directly by the cdc command); it
+	// runs the guard itself, so route to it before guarding here to avoid a
+	// double gate/audit.
 	if opt.Continuous {
 		return RunCDC(parent, d, opt)
 	}
@@ -55,13 +59,21 @@ func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, stri
 		return nil, "", err
 	}
 
-	if opt.CrossEngine {
-		return runCrossEngineSync(parent, d, opt)
+	// Guard BEFORE routing to the cross-engine path, so every non-CDC sync
+	// variant (native and cross-engine — both destructive) is gated and audited.
+	done, err := guardedOp(parent, d, audit.OpSync, opt.From, opt.To)
+	if err != nil {
+		return nil, "", err
 	}
 
-	return d.Runner.Run(parent, jobs.Job{
+	if opt.CrossEngine {
+		return runCrossEngineSync(parent, d, opt, done)
+	}
+
+	return launchGuarded(d.Runner, parent, done, jobs.Job{
 		Stage: "sync",
-		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
+			defer func() { done(retErr) }()
 			srcConn, err := srcDrv.Connect(ctx, src)
 			if err != nil {
 				return err
@@ -103,39 +115,47 @@ func Sync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, stri
 	})
 }
 
-// runCrossEngineSync handles heterogeneous sync (e.g. postgres→mysql) by routing
-// through the canonical-schema machinery: InspectSchema on the source builds a
-// CanonicalSchema, EmitCanonical streams it as JSONL through a jobs.Stream, and
-// ConsumeCanonical on the target replays the rows. Both ends must implement
-// driver.SchemaInspector and driver.CanonicalTransfer.
-func runCrossEngineSync(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, string, error) {
-	if err := RequireCapability(d, opt.From, CapCrossEngineSource); err != nil {
-		return nil, "", err
+// resolveCrossEngine checks cross-engine capability and resolves both profiles
+// and their drivers. Bundled so runCrossEngineSync has a single launch-failure
+// path (which finalizes the audit record once).
+func resolveCrossEngine(d Deps, opt SyncOpts) (src, dst driver.Profile, srcDrv, dstDrv driver.Driver, err error) {
+	if err = RequireCapability(d, opt.From, CapCrossEngineSource); err != nil {
+		return
 	}
-	if err := RequireCapability(d, opt.To, CapCrossEngineTarget); err != nil {
-		return nil, "", err
+	if err = RequireCapability(d, opt.To, CapCrossEngineTarget); err != nil {
+		return
+	}
+	if src, err = d.Profiles.Resolve(opt.From); err != nil {
+		return
+	}
+	if dst, err = d.Profiles.Resolve(opt.To); err != nil {
+		return
+	}
+	if srcDrv, err = d.Drivers.Get(src.Driver); err != nil {
+		return
+	}
+	dstDrv, err = d.Drivers.Get(dst.Driver)
+	return
+}
+
+// runCrossEngineSync handles heterogeneous sync (e.g. postgres→mysql) via the
+// canonical-schema machinery: InspectSchema builds a CanonicalSchema,
+// EmitCanonical streams it as JSONL, ConsumeCanonical replays it on the target.
+// Both ends must implement SchemaInspector and CanonicalTransfer. The audit
+// record opened by the caller's guard is finalized via done.
+func runCrossEngineSync(parent context.Context, d Deps, opt SyncOpts, done func(error)) (<-chan jobs.Event, string, error) {
+	// Resolve everything needed to launch; any failure here finalizes the audit
+	// record (the op was authorized but could not start) and aborts.
+	src, dst, srcDrv, dstDrv, launchErr := resolveCrossEngine(d, opt)
+	if launchErr != nil {
+		done(launchErr)
+		return nil, "", launchErr
 	}
 
-	src, err := d.Profiles.Resolve(opt.From)
-	if err != nil {
-		return nil, "", err
-	}
-	dst, err := d.Profiles.Resolve(opt.To)
-	if err != nil {
-		return nil, "", err
-	}
-	srcDrv, err := d.Drivers.Get(src.Driver)
-	if err != nil {
-		return nil, "", err
-	}
-	dstDrv, err := d.Drivers.Get(dst.Driver)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return d.Runner.Run(parent, jobs.Job{
+	return launchGuarded(d.Runner, parent, done, jobs.Job{
 		Stage: "sync.cross-engine",
-		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
+			defer func() { done(retErr) }()
 			srcConn, err := srcDrv.Connect(ctx, src)
 			if err != nil {
 				return err

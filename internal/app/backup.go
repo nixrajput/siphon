@@ -13,6 +13,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/dumps"
@@ -28,6 +29,21 @@ type Deps struct {
 	Dumps    *dumps.Catalog
 	Runner   *jobs.Runner
 	Drivers  DriverGetter
+	// Auditor records destructive operations; nil is a no-op. It is also the
+	// interception seam for 2FA gating (a pre-check before the verb) and
+	// telemetry (timing/outcome), so those reuse these call sites.
+	Auditor audit.Auditor
+	// Gate, if set, is consulted before a destructive verb runs and can block it
+	// (e.g. require 2FA / destructive confirmation for a profile's group).
+	Gate Gate
+	// Actor is the OS user attributed in audit records.
+	Actor string
+}
+
+// Gate authorizes a destructive operation before it runs. A nil Gate allows
+// everything. Returning a non-nil error blocks the verb.
+type Gate interface {
+	Authorize(ctx context.Context, op audit.Op, profile string) error
 }
 
 // DriverGetter is satisfied by internal/driver.Get. Wrapped to allow mocking.
@@ -60,10 +76,17 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 	if err != nil {
 		return nil, "", err
 	}
+	// Gate (2FA/confirmation) runs synchronously at launch — a block aborts
+	// before the job starts. The audit record is finalized when the job ends.
+	done, err := guardedOp(parent, d, audit.OpBackup, opt.Profile, "")
+	if err != nil {
+		return nil, "", err
+	}
 
-	return d.Runner.Run(parent, jobs.Job{
+	return launchGuarded(d.Runner, parent, done, jobs.Job{
 		Stage: "backup",
-		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
+			defer func() { done(retErr) }()
 			conn, err := drv.Connect(ctx, resolved)
 			if err != nil {
 				return err

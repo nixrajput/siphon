@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase G (ops) — **operational suite** (audit, 2FA gating, telemetry, schedule, tunnel):
+  - **Audit log** (`internal/audit`): an append-only JSONL trail of destructive ops (backup/restore/sync/prune) recording who/what/when/outcome, via a single `guardedOp` interception seam wired into the verbs. Off by default; enable with the `audit:` config block. The same seam is reused by 2FA gating and telemetry (no per-feature re-wrapping).
+  - **2FA / group gating** (`internal/twofactor`): a profile's group can require a typed-name confirmation (`confirm_destructive`) and/or a TOTP code (`require_2fa`) before a destructive op runs. Stdlib RFC 6238 TOTP (HMAC-SHA1, 30s, 6 digits, ±1-step skew), no new dependency; the group's `totp_secret` is a secret-ref. `require_2fa` with no resolvable secret fails closed.
+  - **Telemetry** (`internal/telemetry`): opt-in aggregate per-op counts and error tallies, flushed as JSON. Records the op name and outcome only — never profile, actor, target, or data. Off by default (`telemetry:` config block); composed onto the audit seam via `audit.Multi`.
+  - **`siphon schedule`**: manage cron-scheduled recurring backups. siphon maintains a delimited, siphon-owned block in the user's crontab that invokes `siphon backup <profile>` — the host cron runs the jobs (no daemon). `schedule add <profile> --cron`, `list`, `remove`.
+  - **`siphon tunnel <profile>`**: open a foreground `ssh -L` local-forward to a profile's database through a configured `tunnel.bastion`, using the system ssh client; held open until Ctrl-C.
+
 - Phase G (ops) — **retention & lifecycle** (second G cycle):
   - Chain-aware retention engine in `internal/dumps` (`GroupChains` + `Plan`, pure and DB/clock-free): the catalog is grouped into restorable **chains** (a base plus its incrementals), and retention keeps or prunes each chain as a unit, so an incremental is never orphaned from its base. A chain's age is its newest member, so an actively-appended chain is never pruned mid-life.
   - Three composable policy rules with **union** semantics (a chain is kept if it satisfies any active rule, so adding a rule only ever protects more): `keep_last: N`, `max_age: <duration>`, and grandfather-father-son `gfs: {daily, weekly, monthly}`. An all-zero/omitted policy keeps everything — prune is a no-op unless a rule is explicitly configured.

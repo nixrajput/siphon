@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/dumps"
@@ -47,10 +48,15 @@ func Restore(parent context.Context, d Deps, opt RestoreOpts) (<-chan jobs.Event
 			return nil, "", err
 		}
 	}
+	done, err := guardedOp(parent, d, audit.OpRestore, opt.Profile, opt.DumpID)
+	if err != nil {
+		return nil, "", err
+	}
 
-	return d.Runner.Run(parent, jobs.Job{
+	return launchGuarded(d.Runner, parent, done, jobs.Job{
 		Stage: "restore",
-		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
+			defer func() { done(retErr) }()
 			conn, err := drv.Connect(ctx, resolved)
 			if err != nil {
 				return err

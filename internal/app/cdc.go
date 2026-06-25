@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/canonical"
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -136,11 +137,19 @@ func RunCDC(parent context.Context, d Deps, opt SyncOpts) (<-chan jobs.Event, st
 		return nil, "", err
 	}
 
+	// CDC is destructive (it continuously applies changes to the target), so it
+	// runs through the same gate/audit seam as the other verbs.
+	done, err := guardedOp(parent, d, audit.OpSync, opt.From, opt.To)
+	if err != nil {
+		return nil, "", err
+	}
+
 	jobID := cdcJobID(opt.From, opt.To)
 
-	return d.Runner.Run(parent, jobs.Job{
+	return launchGuarded(d.Runner, parent, done, jobs.Job{
 		Stage: "cdc",
-		Func: func(ctx context.Context, emit func(jobs.Event)) error {
+		Func: func(ctx context.Context, emit func(jobs.Event)) (retErr error) {
+			defer func() { done(retErr) }()
 			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "CDC mode started"})
 
 			srcConn, err := srcDrv.Connect(ctx, src)

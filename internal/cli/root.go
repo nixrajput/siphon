@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nixrajput/siphon/internal/app"
+	"github.com/nixrajput/siphon/internal/audit"
 	"github.com/nixrajput/siphon/internal/config"
 	"github.com/nixrajput/siphon/internal/dumps"
 	"github.com/nixrajput/siphon/internal/errs"
@@ -20,6 +22,7 @@ import (
 	"github.com/nixrajput/siphon/internal/profile"
 	"github.com/nixrajput/siphon/internal/secrets"
 	"github.com/nixrajput/siphon/internal/storage"
+	"github.com/nixrajput/siphon/internal/telemetry"
 	"github.com/nixrajput/siphon/internal/tui"
 )
 
@@ -80,12 +83,87 @@ func buildDeps() (app.Deps, error) {
 	}
 	cat := dumps.New(store)
 
+	fileAuditor, err := buildAuditor(cfg)
+	if err != nil {
+		return app.Deps{}, err
+	}
+	tel, err := buildTelemetry(cfg)
+	if err != nil {
+		return app.Deps{}, err
+	}
+	// The audit log and telemetry recorder are both audit.Auditor sinks; Multi
+	// fans the one destructive-op seam out to whichever are enabled (nil if none).
+	auditor := audit.NewMulti(fileAuditor, tel)
+
 	return app.Deps{
 		Profiles: ps,
 		Dumps:    cat,
 		Runner:   jobs.NewRunner(),
 		Drivers:  app.DefaultDrivers(),
+		Auditor:  auditor,
+		Gate:     buildGate(cfg, res),
+		Actor:    osUser(),
 	}, nil
+}
+
+// buildTelemetry returns a telemetry Recorder (an audit.Auditor sink) when
+// telemetry is enabled in config, else nil. Path defaults to the XDG state dir.
+func buildTelemetry(cfg *config.Config) (audit.Auditor, error) {
+	if !cfg.Telemetry.Enabled {
+		return nil, nil
+	}
+	path := cfg.Telemetry.Path
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve home dir for default telemetry path: %w", err)
+		}
+		path = filepath.Join(home, ".local", "state", "siphon", "telemetry.json")
+	}
+	r := telemetry.NewRecorder(path)
+	if r == nil {
+		return nil, nil
+	}
+	return r, nil
+}
+
+// buildGate returns a prompting Gate when any group enforces a destructive-op
+// policy (confirm_destructive or require_2fa), else nil (no gating). It prompts
+// on stdin and reports on stderr so prompts don't pollute piped stdout.
+func buildGate(cfg *config.Config, res *secrets.Resolver) app.Gate {
+	for _, grp := range cfg.Groups {
+		if grp.ConfirmDestructive || grp.Require2FA {
+			return newPromptGate(cfg, res, os.Stdin, os.Stderr)
+		}
+	}
+	return nil
+}
+
+// buildAuditor returns a file-backed Auditor when audit logging is enabled in
+// config, else nil (a nil Auditor is a no-op). Path defaults to the XDG state
+// dir when unset.
+func buildAuditor(cfg *config.Config) (audit.Auditor, error) {
+	if !cfg.Audit.Enabled {
+		return nil, nil
+	}
+	path := cfg.Audit.Path
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve home dir for default audit path: %w", err)
+		}
+		path = filepath.Join(home, ".local", "state", "siphon", "audit.log")
+	}
+	return audit.NewFileAuditor(path, nil)
+}
+
+// osUser returns the current OS username for audit attribution, falling back to
+// "unknown" when it cannot be determined.
+func osUser() string {
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	return "unknown"
 }
 
 // buildStore selects the dump-catalog storage backend from config. Type "s3"
@@ -114,22 +192,6 @@ func buildStore(cfg *config.Config) (storage.Store, error) {
 		dumpDir = filepath.Join(home, ".local", "share", "siphon", "dumps")
 	}
 	return storage.NewLocal(dumpDir)
-}
-
-func newScheduleCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "schedule",
-		Short: "Cron-managed recurring backups (Phase G)",
-		RunE:  func(*cobra.Command, []string) error { return fmt.Errorf("schedule: not implemented (Phase G)") },
-	}
-}
-
-func newTunnelCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "tunnel",
-		Short: "SSH tunnel helper (Phase G)",
-		RunE:  func(*cobra.Command, []string) error { return fmt.Errorf("tunnel: not implemented (Phase G)") },
-	}
 }
 
 // Execute runs the root command using stdout/stderr and returns the POSIX

@@ -59,16 +59,19 @@ func TestExecute_ErrsErrorExitCode_RoutesThroughCode(t *testing.T) {
 	}
 }
 
-func TestRoot_StubSubcommand_ReturnsNotImplementedError(t *testing.T) {
+// schedule and tunnel are implemented (Phase G ops cycle). Bare `schedule`
+// is a parent command that shows help; `tunnel <profile>` errors clearly when
+// the profile has no bastion configured.
+func TestRoot_ScheduleShowsSubcommands(t *testing.T) {
 	var out, errb bytes.Buffer
 	root := NewRoot(&out, &errb)
 	root.SetArgs([]string{"schedule"})
-
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("Execute(schedule) returned nil; want 'not implemented' error")
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute(schedule) = %v; want nil (help)", err)
 	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Fatalf("error = %q; want it to contain 'not implemented'", err.Error())
+	for _, sub := range []string{"add", "list", "remove"} {
+		if !strings.Contains(out.String(), sub) {
+			t.Errorf("schedule help missing subcommand %q:\n%s", sub, out.String())
+		}
 	}
 }
