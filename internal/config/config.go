@@ -12,17 +12,26 @@ import (
 )
 
 type Config struct {
-	Version  int                      `yaml:"version"`
-	Defaults Defaults                 `yaml:"defaults"`
-	Storage  StorageConfig            `yaml:"storage"`
-	Audit    AuditConfig              `yaml:"audit"`
-	Profiles map[string]ProfileConfig `yaml:"profiles"`
-	Groups   map[string]GroupConfig   `yaml:"groups"`
+	Version   int                      `yaml:"version"`
+	Defaults  Defaults                 `yaml:"defaults"`
+	Storage   StorageConfig            `yaml:"storage"`
+	Audit     AuditConfig              `yaml:"audit"`
+	Telemetry TelemetryConfig          `yaml:"telemetry"`
+	Profiles  map[string]ProfileConfig `yaml:"profiles"`
+	Groups    map[string]GroupConfig   `yaml:"groups"`
 }
 
 // AuditConfig controls the append-only audit log of destructive operations.
 // Disabled by default; Path defaults to <state>/siphon/audit.log when empty.
 type AuditConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path,omitempty"`
+}
+
+// TelemetryConfig controls opt-in aggregate operational metrics (per-op counts
+// and error tallies — never identifying data). Disabled by default; Path
+// defaults to <state>/siphon/telemetry.json when empty.
+type TelemetryConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path,omitempty"`
 }

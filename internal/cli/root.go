@@ -22,6 +22,7 @@ import (
 	"github.com/nixrajput/siphon/internal/profile"
 	"github.com/nixrajput/siphon/internal/secrets"
 	"github.com/nixrajput/siphon/internal/storage"
+	"github.com/nixrajput/siphon/internal/telemetry"
 	"github.com/nixrajput/siphon/internal/tui"
 )
 
@@ -82,10 +83,17 @@ func buildDeps() (app.Deps, error) {
 	}
 	cat := dumps.New(store)
 
-	auditor, err := buildAuditor(cfg)
+	fileAuditor, err := buildAuditor(cfg)
 	if err != nil {
 		return app.Deps{}, err
 	}
+	tel, err := buildTelemetry(cfg)
+	if err != nil {
+		return app.Deps{}, err
+	}
+	// The audit log and telemetry recorder are both audit.Auditor sinks; Multi
+	// fans the one destructive-op seam out to whichever are enabled (nil if none).
+	auditor := audit.NewMulti(fileAuditor, tel)
 
 	return app.Deps{
 		Profiles: ps,
@@ -96,6 +104,27 @@ func buildDeps() (app.Deps, error) {
 		Gate:     buildGate(cfg, res),
 		Actor:    osUser(),
 	}, nil
+}
+
+// buildTelemetry returns a telemetry Recorder (an audit.Auditor sink) when
+// telemetry is enabled in config, else nil. Path defaults to the XDG state dir.
+func buildTelemetry(cfg *config.Config) (audit.Auditor, error) {
+	if !cfg.Telemetry.Enabled {
+		return nil, nil
+	}
+	path := cfg.Telemetry.Path
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve home dir for default telemetry path: %w", err)
+		}
+		path = filepath.Join(home, ".local", "state", "siphon", "telemetry.json")
+	}
+	r := telemetry.NewRecorder(path)
+	if r == nil {
+		return nil, nil
+	}
+	return r, nil
 }
 
 // buildGate returns a prompting Gate when any group enforces a destructive-op
