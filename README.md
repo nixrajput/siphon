@@ -17,7 +17,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 ---
 
 > [!WARNING]
-> **Pre-1.0 — active development.** Postgres, MySQL, and MariaDB backup/restore/sync/verify/inspect work end-to-end today (Phases B + E), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). The driver layer is hardened with a shared cross-driver test harness, capability gating, and connection retry (Phase D). Advanced transfer is complete (Phase F): incremental backup/restore, cross-engine sync, and CDC continuous replication all work end-to-end. Ops features (cloud storage, secret backends, retention, telemetry) are on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a` … `phase-f`).
+> **Pre-1.0 — active development.** Postgres, MySQL, and MariaDB backup/restore/sync/verify/inspect work end-to-end today (Phases B + E), and bare `siphon` opens an interactive multi-panel dashboard (Phase C). The driver layer is hardened with a shared cross-driver test harness, capability gating, and connection retry (Phase D). Advanced transfer is complete (Phase F): incremental backup/restore, cross-engine sync, and CDC continuous replication all work end-to-end. Ops features (Phase G) are underway — the dump catalog can now live in an S3 / S3-compatible bucket (`storage:` config block); secret backends, retention, and telemetry are still on the [roadmap](#roadmap). APIs, flags, and the on-disk dump format may change before 1.0. Track progress via the milestone tags (`phase-a` … `phase-f`).
 
 ## Table of contents
 
@@ -55,7 +55,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 | **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide                                                                                                                                                                                                                                                         | ✅ Complete |
 | **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness                                                                                                                                                                                                                                                             | ✅ Complete |
 | **F** — Advanced transfer         | All four advanced-transfer modes work end-to-end: bounded-buffer streaming sync; **incremental** backup/restore (`backup --incremental --base <id>` captures a bounded change set via Postgres logical decoding / MySQL-MariaDB binlog, `restore` replays the base→incremental chain, Postgres orphan-slot sweep); **cross-engine** sync (`sync --cross-engine` — typed `SchemaInspector` introspection → canonical type-mapping, e.g. Postgres → MySQL); and **CDC** (`siphon cdc` / `sync --continuous` — unbounded change streaming with snapshot→stream handoff, resumable, same- and cross-engine). Live DB paths are integration-tested in CI — see [docs/INCREMENTAL.md](docs/INCREMENTAL.md), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md), [docs/CDC.md](docs/CDC.md) | ✅ Complete |
-| **G** — Ops features              | Cloud storage, secret backends, profile groups + 2FA, team mode, audit log, retention, telemetry                                                                                                                                                                                                                                                                                                                                        | ⏳ Planned  |
+| **G** — Ops features              | **Cloud storage** ships first: the dump catalog can live in an S3 / S3-compatible bucket via a pluggable `storage.Store` backend (local + S3 today; GCS/Azure are a fast-follow), selected by a `storage:` config block, with SHA-256 integrity preserved end-to-end — see [docs/STORAGE.md](docs/STORAGE.md). Secret backends, profile groups + 2FA, team mode, audit log, retention, and telemetry follow in later G cycles.                                                                                                                                                                                                                                                                                                              | 🟡 In progress |
 | **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                                                                                                                                                                                                                                                                                       | ⏳ Planned  |
 
 ## Requirements
@@ -167,6 +167,19 @@ profiles:
 ```
 
 Secret references (`env:VAR`) are resolved at runtime, so the config file is safe to commit. Plain values are also accepted.
+
+By default the dump catalog lives on local disk at `defaults.dump_dir`. To store dumps in an S3 / S3-compatible bucket instead, add a `storage:` block:
+
+```yaml
+storage:
+  type: s3                # "local" (default) | "s3"
+  bucket: my-siphon-dumps # required for s3
+  prefix: prod            # optional key prefix
+  region: us-east-1
+  endpoint: ""            # optional: custom endpoint for MinIO / R2
+```
+
+Credentials are resolved from the standard AWS chain (env vars, `~/.aws`, instance role) — never stored in the config file. See [docs/STORAGE.md](docs/STORAGE.md) for details.
 
 ## Architecture
 

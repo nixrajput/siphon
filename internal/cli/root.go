@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/nixrajput/siphon/internal/jobs"
 	"github.com/nixrajput/siphon/internal/profile"
 	"github.com/nixrajput/siphon/internal/secrets"
+	"github.com/nixrajput/siphon/internal/storage"
 	"github.com/nixrajput/siphon/internal/tui"
 )
 
@@ -72,18 +74,11 @@ func buildDeps() (app.Deps, error) {
 	res := secrets.NewResolver(secrets.Env{}, secrets.Passthrough{})
 	ps := profile.New(cfg, res, config.Save)
 
-	dumpDir := cfg.Defaults.DumpDir
-	if dumpDir == "" {
-		home, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			return app.Deps{}, fmt.Errorf("resolve home dir for default dump_dir: %w", homeErr)
-		}
-		dumpDir = filepath.Join(home, ".local", "share", "siphon", "dumps")
-	}
-	cat, err := dumps.NewCatalog(dumpDir)
+	store, err := buildStore(cfg)
 	if err != nil {
 		return app.Deps{}, err
 	}
+	cat := dumps.New(store)
 
 	return app.Deps{
 		Profiles: ps,
@@ -91,6 +86,34 @@ func buildDeps() (app.Deps, error) {
 		Runner:   jobs.NewRunner(),
 		Drivers:  app.DefaultDrivers(),
 	}, nil
+}
+
+// buildStore selects the dump-catalog storage backend from config. Type "s3"
+// builds an S3-backed store; anything else (the default) uses the local
+// filesystem rooted at Defaults.DumpDir (or the XDG share dir when unset).
+func buildStore(cfg *config.Config) (storage.Store, error) {
+	if cfg.Storage.Type == "s3" {
+		st, err := storage.NewS3(context.Background(), storage.S3Options{
+			Bucket:   cfg.Storage.Bucket,
+			Prefix:   cfg.Storage.Prefix,
+			Region:   cfg.Storage.Region,
+			Endpoint: cfg.Storage.Endpoint,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("init s3 storage: %w", err)
+		}
+		return st, nil
+	}
+
+	dumpDir := cfg.Defaults.DumpDir
+	if dumpDir == "" {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return nil, fmt.Errorf("resolve home dir for default dump_dir: %w", homeErr)
+		}
+		dumpDir = filepath.Join(home, ".local", "share", "siphon", "dumps")
+	}
+	return storage.NewLocal(dumpDir)
 }
 
 func newScheduleCmd() *cobra.Command {

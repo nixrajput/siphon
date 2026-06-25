@@ -23,7 +23,7 @@ func dumpsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			all, err := deps.Dumps.List()
+			all, err := deps.Dumps.List(c.Context())
 			if err != nil {
 				return err
 			}
@@ -44,7 +44,7 @@ func dumpsInspectCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			m, err := deps.Dumps.ReadMeta(args[0])
+			m, err := deps.Dumps.ReadMeta(c.Context(), args[0])
 			if err != nil {
 				return err
 			}
@@ -65,13 +65,13 @@ func dumpsPruneCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rep, err := deps.Dumps.PruneDryRun(dumps.RetentionPolicy{MaxAge: maxAge})
+			rep, err := deps.Dumps.PruneDryRun(c.Context(), dumps.RetentionPolicy{MaxAge: maxAge})
 			if err != nil {
 				return err
 			}
 			for _, m := range rep.Would {
 				if apply {
-					if delErr := deps.Dumps.Delete(m.ID); delErr != nil {
+					if delErr := deps.Dumps.Delete(c.Context(), m.ID); delErr != nil {
 						_, _ = fmt.Fprintf(c.OutOrStdout(), "  ! failed to delete %s: %v\n", m.ID, delErr)
 						continue
 					}

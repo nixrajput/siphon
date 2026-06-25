@@ -1,6 +1,7 @@
 package dumps
 
 import (
+	"context"
 	"errors"
 	"fmt"
 )
@@ -11,7 +12,7 @@ import (
 // It walks ParentID backwards until it reaches a base (BaseID == ID, or a
 // legacy empty BaseID). Cycles and broken chains (a missing parent) are
 // reported as errors rather than looping forever or silently truncating.
-func (c *Catalog) ResolveChain(targetID string) ([]Meta, error) {
+func (c *Catalog) ResolveChain(ctx context.Context, targetID string) ([]Meta, error) {
 	visited := map[string]bool{}
 	var chain []Meta
 
@@ -22,7 +23,7 @@ func (c *Catalog) ResolveChain(targetID string) ([]Meta, error) {
 		}
 		visited[cur] = true
 
-		m, err := c.ReadMeta(cur)
+		m, err := c.ReadMeta(ctx, cur)
 		if err != nil {
 			return nil, fmt.Errorf("chain broken at %s: %w", cur, err)
 		}

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"os"
 	"time"
 
 	"github.com/nixrajput/siphon/internal/driver"
@@ -16,13 +15,13 @@ import (
 // dump file and comparing it against the checksum recorded in the meta sidecar.
 // It is stateless — no DB connection is required (Phase B checksums only; Phase
 // F adds envelope-header validation via the driver's Verify method).
-func Verify(_ context.Context, d Deps, dumpID string) (*driver.VerifyReport, error) {
-	meta, err := d.Dumps.ReadMeta(dumpID)
+func Verify(ctx context.Context, d Deps, dumpID string) (*driver.VerifyReport, error) {
+	meta, err := d.Dumps.ReadMeta(ctx, dumpID)
 	if err != nil {
 		return nil, err
 	}
 
-	f, err := os.Open(d.Dumps.Path(dumpID))
+	f, err := d.Dumps.OpenDump(ctx, dumpID)
 	if err != nil {
 		return nil, err
 	}

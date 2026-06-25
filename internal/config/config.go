@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -12,6 +13,7 @@ import (
 type Config struct {
 	Version  int                      `yaml:"version"`
 	Defaults Defaults                 `yaml:"defaults"`
+	Storage  StorageConfig            `yaml:"storage"`
 	Profiles map[string]ProfileConfig `yaml:"profiles"`
 	Groups   map[string]GroupConfig   `yaml:"groups"`
 }
@@ -21,6 +23,37 @@ type Defaults struct {
 	Jobs          int    `yaml:"jobs"`
 	Compression   int    `yaml:"compression"`
 	SecretBackend string `yaml:"secret_backend"`
+}
+
+// StorageConfig selects where the dump catalog physically lives. Type "local"
+// (or empty, the default) uses Defaults.DumpDir on the local filesystem. Type
+// "s3" stores dumps in an S3 or S3-compatible bucket. Credentials are NOT held
+// here — the S3 SDK resolves them from the standard chain (env vars, shared
+// config, instance role), so the config file stays free of secrets.
+type StorageConfig struct {
+	Type     string `yaml:"type"`               // "local" | "s3" (default "local")
+	Bucket   string `yaml:"bucket,omitempty"`   // s3: target bucket
+	Prefix   string `yaml:"prefix,omitempty"`   // s3: optional key prefix within the bucket
+	Region   string `yaml:"region,omitempty"`   // s3: AWS region
+	Endpoint string `yaml:"endpoint,omitempty"` // s3: custom endpoint for S3-compatible services (MinIO, R2)
+}
+
+// Validate checks the storage block for internal consistency. It is called by
+// Load so a malformed storage config fails fast with a clear message rather
+// than surfacing as an obscure runtime error on first backup.
+func (s StorageConfig) Validate() error {
+	t := strings.TrimSpace(s.Type)
+	switch t {
+	case "", "local":
+		return nil
+	case "s3":
+		if strings.TrimSpace(s.Bucket) == "" {
+			return errors.New("storage.type is s3 but storage.bucket is empty")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown storage.type %q (want \"local\" or \"s3\")", t)
+	}
 }
 
 // ProfileConfig is the unresolved on-disk form of a connection profile.
@@ -78,6 +111,10 @@ func Load() (*Config, error) {
 	for name, p := range cfg.Profiles {
 		p.Name = name
 		cfg.Profiles[name] = p
+	}
+
+	if err := cfg.Storage.Validate(); err != nil {
+		return nil, fmt.Errorf("config storage: %w", err)
 	}
 
 	return cfg, nil

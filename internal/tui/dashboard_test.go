@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -134,7 +135,7 @@ func TestNewRestore_AdaptiveDumpIDField(t *testing.T) {
 			Driver:  "postgres",
 			Created: time.Now(),
 		}
-		if err := d.Dumps.WriteMeta(meta); err != nil {
+		if err := d.Dumps.WriteMeta(context.Background(), meta); err != nil {
 			t.Fatalf("WriteMeta: %v", err)
 		}
 		form, res := modals.NewRestore(d, "", "")

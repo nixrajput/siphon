@@ -1,6 +1,9 @@
 package dumps
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // RetentionPolicy is filled in by Phase G. Phase B ships only a dry-run prune
 // that lists what *would* be deleted given a max-age policy.
@@ -16,8 +19,8 @@ type PruneReport struct {
 
 // PruneDryRun returns which dumps would be deleted under policy p without
 // actually deleting anything.
-func (c *Catalog) PruneDryRun(p RetentionPolicy) (PruneReport, error) {
-	all, err := c.List()
+func (c *Catalog) PruneDryRun(ctx context.Context, p RetentionPolicy) (PruneReport, error) {
+	all, err := c.List(ctx)
 	if err != nil {
 		return PruneReport{}, err
 	}

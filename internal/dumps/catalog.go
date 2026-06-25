@@ -1,32 +1,48 @@
 package dumps
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
+	"io"
 	"strings"
 
 	"github.com/nixrajput/siphon/internal/errs"
+	"github.com/nixrajput/siphon/internal/storage"
 )
 
-// Catalog is a filesystem-backed dump store. Phase G replaces the
-// filesystem path with a Storage abstraction; the API does not change.
+// Catalog is a dump store addressed by dump ID. It holds a storage.Store
+// substrate (local directory or object store) and maps each ID to two keys:
+// "<id>.dump" (the dump body, envelope-prefixed) and "<id>.meta.json" (the
+// sidecar metadata). Callers never see storage paths — only IDs.
 type Catalog struct {
-	root string
+	store storage.Store
 }
 
-// NewCatalog creates the directory if missing and returns a Catalog rooted there.
+const (
+	dumpSuffix = ".dump"
+	metaSuffix = ".meta.json"
+)
+
+// New returns a Catalog over the given storage backend.
+func New(store storage.Store) *Catalog {
+	return &Catalog{store: store}
+}
+
+// NewCatalog returns a Catalog backed by a local directory, creating it if
+// missing. Retained for callers (and tests) that want the default local
+// backend without constructing a storage.Store themselves.
 func NewCatalog(root string) (*Catalog, error) {
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	st, err := storage.NewLocal(root)
+	if err != nil {
 		return nil, err
 	}
-	return &Catalog{root: root}, nil
+	return &Catalog{store: st}, nil
 }
 
-// validID rejects IDs that could escape the catalog root when joined into a
-// path. Dump IDs are ULIDs, but restore/inspect/verify take the ID from user
-// input, so a crafted value like "../../etc/passwd" must not traverse out.
+// validID rejects IDs that could escape the storage key space. Dump IDs are
+// ULIDs, but restore/inspect/verify take the ID from user input, so a crafted
+// value like "../../etc/passwd" must not traverse out.
 func validID(id string) error {
 	if id == "" || id == "." || id == ".." ||
 		strings.ContainsAny(id, `/\`) || strings.Contains(id, "..") {
@@ -35,73 +51,123 @@ func validID(id string) error {
 	return nil
 }
 
-// Path returns the dump file path for the given ID. filepath.Base defensively
-// strips any path components so a stray separator can never escape root.
-func (c *Catalog) Path(id string) string { return filepath.Join(c.root, filepath.Base(id)+".dump") }
+func dumpKey(id string) string { return id + dumpSuffix }
+func metaKey(id string) string { return id + metaSuffix }
 
-// MetaPath returns the sidecar JSON path for the given ID.
-func (c *Catalog) MetaPath(id string) string {
-	return filepath.Join(c.root, filepath.Base(id)+".meta.json")
+// PutDump streams r (the envelope-prefixed dump body) to the store under the
+// dump key for id. The store guarantees the object is published atomically, so a
+// failed or cancelled write never leaves a partial dump addressable by id.
+func (c *Catalog) PutDump(ctx context.Context, id string, r io.Reader) error {
+	if err := validID(id); err != nil {
+		return err
+	}
+	return c.store.Put(ctx, dumpKey(id), r)
 }
 
-// Root returns the catalog's root directory.
-func (c *Catalog) Root() string { return c.root }
+// OpenDump opens the dump body for id as a one-shot forward stream. The caller
+// must Close it. A missing dump maps to a CodeUser error.
+func (c *Catalog) OpenDump(ctx context.Context, id string) (io.ReadCloser, error) {
+	if err := validID(id); err != nil {
+		return nil, err
+	}
+	rc, err := c.store.Get(ctx, dumpKey(id))
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, &errs.Error{Op: "dumps.open", Code: errs.CodeUser, Cause: errs.ErrDumpCorrupt, Hint: "no dump body for " + id}
+	}
+	if err != nil {
+		return nil, &errs.Error{Op: "dumps.open", Code: errs.CodeSystem, Cause: err}
+	}
+	return rc, nil
+}
 
-// WriteMeta serializes m and writes it to <id>.meta.json.
-func (c *Catalog) WriteMeta(m *Meta) error {
+// WriteMeta serializes m and writes it under the meta key. Write meta LAST when
+// publishing a dump: the catalog enumerates by meta, so a dump body without its
+// meta is an invisible (prunable) orphan, whereas a meta without its body would
+// be a dangling catalog entry.
+func (c *Catalog) WriteMeta(ctx context.Context, m *Meta) error {
+	if err := validID(m.ID); err != nil {
+		return err
+	}
 	body, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(c.MetaPath(m.ID), body, 0o600)
+	return c.store.Put(ctx, metaKey(m.ID), strings.NewReader(string(body)))
 }
 
-// ReadMeta loads <id>.meta.json from disk.
-func (c *Catalog) ReadMeta(id string) (*Meta, error) {
+// ReadMeta loads and decodes the sidecar metadata for id.
+func (c *Catalog) ReadMeta(ctx context.Context, id string) (*Meta, error) {
 	if err := validID(id); err != nil {
 		return nil, err
 	}
-	body, err := os.ReadFile(c.MetaPath(id))
-	if errors.Is(err, os.ErrNotExist) {
+	rc, err := c.store.Get(ctx, metaKey(id))
+	if errors.Is(err, storage.ErrNotFound) {
 		return nil, &errs.Error{Op: "dumps.read_meta", Code: errs.CodeUser, Cause: errs.ErrDumpCorrupt, Hint: "no metadata for " + id}
 	}
 	if err != nil {
-		return nil, err
+		return nil, &errs.Error{Op: "dumps.read_meta", Code: errs.CodeSystem, Cause: err}
+	}
+	defer func() { _ = rc.Close() }()
+	body, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, &errs.Error{Op: "dumps.read_meta", Code: errs.CodeSystem, Cause: err}
 	}
 	m := &Meta{}
-	return m, json.Unmarshal(body, m)
+	if err := json.Unmarshal(body, m); err != nil {
+		return nil, &errs.Error{Op: "dumps.read_meta", Code: errs.CodeUser, Cause: errs.ErrDumpCorrupt, Hint: "metadata for " + id + " is corrupt"}
+	}
+	return m, nil
 }
 
-// List returns metadata for every dump in the catalog, sorted newest first.
-func (c *Catalog) List() ([]Meta, error) {
-	entries, err := os.ReadDir(c.root)
+// List returns metadata for every dump in the catalog, sorted newest first. It
+// enumerates meta keys, reading each; a corrupt entry is skipped rather than
+// failing the whole listing.
+func (c *Catalog) List(ctx context.Context) ([]Meta, error) {
+	keys, err := c.store.List(ctx)
 	if err != nil {
-		return nil, err
+		return nil, &errs.Error{Op: "dumps.list", Code: errs.CodeSystem, Cause: err}
 	}
 	var out []Meta
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".meta.json") {
+	for _, k := range keys {
+		if !strings.HasSuffix(k, metaSuffix) {
 			continue
 		}
-		id := strings.TrimSuffix(e.Name(), ".meta.json")
-		m, err := c.ReadMeta(id)
+		id := strings.TrimSuffix(k, metaSuffix)
+		m, err := c.ReadMeta(ctx, id)
 		if err != nil {
-			continue // skip corrupt entries; user can `dumps prune --orphans` later
+			// Skip only a corrupt/missing user entry (the user can prune it
+			// later). A system error — a backend failure or a cancelled context —
+			// must propagate, or List would return partial results as success and
+			// silently hide an outage or an aborted run.
+			var e *errs.Error
+			if errors.As(err, &e) && e.Code == errs.CodeUser {
+				continue
+			}
+			return nil, err
 		}
 		out = append(out, *m)
 	}
-	// sort newest first
 	sortByCreatedDesc(out)
 	return out, nil
 }
 
-// Delete removes both the dump file and its sidecar.
-func (c *Catalog) Delete(id string) error {
+// Delete removes both the dump body and its sidecar. Delete is idempotent in the
+// store, so a missing object is not an error.
+func (c *Catalog) Delete(ctx context.Context, id string) error {
 	if err := validID(id); err != nil {
 		return err
 	}
-	_ = os.Remove(c.Path(id))
-	return os.Remove(c.MetaPath(id))
+	// Delete meta FIRST. The catalog enumerates by meta, so if the second delete
+	// fails the worst case is an invisible orphan body (prunable) rather than a
+	// catalog entry that lists a dump whose body is already gone. This mirrors
+	// the write path, which writes meta last for the same invariant.
+	if err := c.store.Delete(ctx, metaKey(id)); err != nil {
+		return &errs.Error{Op: "dumps.delete", Code: errs.CodeSystem, Cause: err}
+	}
+	if err := c.store.Delete(ctx, dumpKey(id)); err != nil {
+		return &errs.Error{Op: "dumps.delete", Code: errs.CodeSystem, Cause: err}
+	}
+	return nil
 }
 
 func sortByCreatedDesc(m []Meta) {

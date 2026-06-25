@@ -88,7 +88,7 @@ func TestBackupRestoreVerify_Roundtrip(t *testing.T) {
 	}
 	drain(t, bch)
 
-	entries, err := cat.List()
+	entries, err := cat.List(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,12 +3,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -94,7 +94,7 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 			// NOTHING / INSERT IGNORE) so such a re-apply is harmless. Capturing
 			// after (not before) the dump avoids the inverse hazard of streaming
 			// pre-snapshot inserts that would conflict on PK.
-			bodyTmp, err := os.CreateTemp(d.Dumps.Root(), "siphon-base-body-*")
+			bodyTmp, err := os.CreateTemp("", "siphon-base-body-*")
 			if err != nil {
 				return err
 			}
@@ -138,15 +138,6 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 			}
 
 			id := ulid.Make().String()
-			tmpPath := filepath.Join(d.Dumps.Root(), id+".dump.tmp")
-			finalPath := d.Dumps.Path(id)
-
-			f, err := os.Create(tmpPath)
-			if err != nil {
-				return err
-			}
-			h := sha256.New()
-			tee := io.MultiWriter(f, h)
 
 			env := &dumps.Envelope{
 				Type:    dumps.EnvelopeBase,
@@ -158,41 +149,15 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 				env.BinlogFile = basePos.BinlogFile
 				env.BinlogEnd = basePos.BinlogPos
 			}
-			if _, err := dumps.WriteEnvelope(tee, env); err != nil {
-				_ = f.Close()
-				_ = os.Remove(tmpPath)
-				return err
-			}
 
-			body, err := os.Open(bodyPath)
+			// Assemble the dump as envelope ++ body and stream it through the
+			// catalog's store under id, teeing through sha256 as it flows. The
+			// store publishes the object atomically, so a failed/cancelled Put
+			// leaves nothing addressable by id. Hashing stays here (app-side), so
+			// integrity is identical regardless of the storage backend.
+			size, checksum, err := putDump(ctx, d.Dumps, id, env, bodyPath)
 			if err != nil {
-				_ = f.Close()
-				_ = os.Remove(tmpPath)
 				return err
-			}
-			if _, err := io.Copy(tee, body); err != nil {
-				_ = body.Close()
-				_ = f.Close()
-				_ = os.Remove(tmpPath)
-				return err
-			}
-			_ = body.Close()
-
-			closeErr := f.Close()
-			if closeErr != nil {
-				_ = os.Remove(tmpPath)
-				return &errs.Error{Op: "app.backup", Code: errs.CodeSystem, Cause: closeErr, Hint: "failed to flush dump to disk (out of space?)"}
-			}
-
-			if err := os.Rename(tmpPath, finalPath); err != nil {
-				_ = os.Remove(tmpPath)
-				return err
-			}
-
-			st, _ := os.Stat(finalPath)
-			size := int64(0)
-			if st != nil {
-				size = st.Size()
 			}
 
 			meta := &dumps.Meta{
@@ -200,18 +165,20 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 				Profile:    opt.Profile,
 				Driver:     resolved.Driver,
 				SizeBytes:  size,
-				Checksum:   "sha256:" + hex.EncodeToString(h.Sum(nil)),
+				Checksum:   checksum,
 				Created:    time.Now(),
 				DumpFormat: "custom",
 			}
-			if writeErr := d.Dumps.WriteMeta(meta); writeErr != nil {
-				// The catalog enumerates by sidecar metadata, so a dump without
-				// its meta would be an invisible orphan that never gets pruned.
-				_ = os.Remove(finalPath)
+			// Write meta LAST: the catalog enumerates by sidecar metadata, so a
+			// dump body without its meta is an invisible (prunable) orphan, never
+			// a dangling catalog entry. On meta failure, best-effort remove the
+			// orphaned body.
+			if writeErr := d.Dumps.WriteMeta(ctx, meta); writeErr != nil {
+				_ = d.Dumps.Delete(ctx, id)
 				return writeErr
 			}
 
-			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "wrote " + finalPath})
+			emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "wrote dump " + id})
 			return nil
 		},
 	})
@@ -227,7 +194,7 @@ func Backup(parent context.Context, d Deps, opt BackupOpts) (<-chan jobs.Event, 
 // envelope(end position) followed by the temp body — checksumming the whole file
 // as it is written, mirroring the full-backup tmp→rename + sha + WriteMeta flow.
 func runIncrementalBackup(ctx context.Context, d Deps, opt BackupOpts, resolved driver.Profile, conn driver.Conn, emit func(jobs.Event)) error {
-	base, err := d.Dumps.ReadMeta(opt.BaseID)
+	base, err := d.Dumps.ReadMeta(ctx, opt.BaseID)
 	if err != nil {
 		return &errs.Error{
 			Op:    "app.backup.incremental",
@@ -249,7 +216,7 @@ func runIncrementalBackup(ctx context.Context, d Deps, opt BackupOpts, resolved 
 		}
 	}
 
-	since, err := basePosition(d, opt.BaseID)
+	since, err := basePosition(ctx, d, opt.BaseID)
 	if err != nil {
 		return err
 	}
@@ -274,9 +241,11 @@ func runIncrementalBackup(ctx context.Context, d Deps, opt BackupOpts, resolved 
 		}
 	}
 
-	// Stream the change body to a temp file so we learn the end Position before
-	// writing the envelope (which must carry that end Position).
-	bodyTmp, err := os.CreateTemp(d.Dumps.Root(), "siphon-inc-body-*")
+	// Stream the change body to a local temp file so we learn the end Position
+	// before writing the envelope (which must carry that end Position). The body
+	// is staged locally regardless of the catalog's storage backend, then
+	// published in one streamed Put.
+	bodyTmp, err := os.CreateTemp("", "siphon-inc-body-*")
 	if err != nil {
 		return err
 	}
@@ -293,17 +262,7 @@ func runIncrementalBackup(ctx context.Context, d Deps, opt BackupOpts, resolved 
 		return &errs.Error{Op: "app.backup.incremental", Code: errs.CodeSystem, Cause: closeErr, Hint: "failed to flush change body to disk"}
 	}
 
-	// Assemble the final dump: envelope(end position) + change body.
 	id := ulid.Make().String()
-	tmpPath := filepath.Join(d.Dumps.Root(), id+".dump.tmp")
-	finalPath := d.Dumps.Path(id)
-
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		return err
-	}
-	h := sha256.New()
-	tee := io.MultiWriter(f, h)
 
 	// The chain root: if the base is itself an incremental, inherit its BaseID;
 	// otherwise the base IS the root.
@@ -323,71 +282,81 @@ func runIncrementalBackup(ctx context.Context, d Deps, opt BackupOpts, resolved 
 		env.BinlogFile = endPos.BinlogFile
 		env.BinlogEnd = endPos.BinlogPos
 	}
-	if _, err := dumps.WriteEnvelope(tee, env); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
 
-	body, err := os.Open(bodyPath)
+	size, checksum, err := putDump(ctx, d.Dumps, id, env, bodyPath)
 	if err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if _, err := io.Copy(tee, body); err != nil {
-		_ = body.Close()
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	_ = body.Close()
-
-	closeErr = f.Close()
-	if closeErr != nil {
-		_ = os.Remove(tmpPath)
-		return &errs.Error{Op: "app.backup.incremental", Code: errs.CodeSystem, Cause: closeErr, Hint: "failed to flush dump to disk (out of space?)"}
-	}
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		_ = os.Remove(tmpPath)
 		return err
 	}
 
-	st, _ := os.Stat(finalPath)
-	size := int64(0)
-	if st != nil {
-		size = st.Size()
-	}
 	meta := &dumps.Meta{
 		ID:         id,
 		Profile:    opt.Profile,
 		Driver:     resolved.Driver,
 		SizeBytes:  size,
-		Checksum:   "sha256:" + hex.EncodeToString(h.Sum(nil)),
+		Checksum:   checksum,
 		Created:    time.Now(),
 		DumpFormat: "jsonl-changes",
 		BaseID:     root,
 		ParentID:   opt.BaseID,
 	}
-	if writeErr := d.Dumps.WriteMeta(meta); writeErr != nil {
-		_ = os.Remove(finalPath)
+	if writeErr := d.Dumps.WriteMeta(ctx, meta); writeErr != nil {
+		_ = d.Dumps.Delete(ctx, id)
 		return writeErr
 	}
 
-	emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "wrote " + finalPath})
+	emit(jobs.Event{Phase: jobs.PhaseProgress, Message: "wrote dump " + id})
 	return nil
+}
+
+// putDump assembles a dump as the 4 KB envelope followed by the staged body
+// file at bodyPath, streams it into the catalog under id, and returns the total
+// byte count and the sha256 checksum (computed over the same envelope++body
+// stream). The store publishes atomically, so a failed Put leaves nothing
+// addressable by id. Counting size and hashing inline keeps both backend-
+// agnostic — neither depends on the object being a local file afterward.
+func putDump(ctx context.Context, cat *dumps.Catalog, id string, env *dumps.Envelope, bodyPath string) (int64, string, error) {
+	var hdr bytes.Buffer
+	if _, err := dumps.WriteEnvelope(&hdr, env); err != nil {
+		return 0, "", err
+	}
+	body, err := os.Open(bodyPath)
+	if err != nil {
+		return 0, "", err
+	}
+	defer func() { _ = body.Close() }()
+
+	h := sha256.New()
+	counter := &countWriter{}
+	// Reader order: envelope header bytes, then the body file. Tee through the
+	// hash and a byte counter as the store consumes the stream.
+	src := io.TeeReader(io.MultiReader(&hdr, body), io.MultiWriter(h, counter))
+
+	if err := cat.PutDump(ctx, id, src); err != nil {
+		return 0, "", err
+	}
+	return counter.n, "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// countWriter is an io.Writer that only counts the bytes written to it, so the
+// dump's size can be recorded as the assembled stream flows to the store
+// (which may be remote, so os.Stat on the result is not an option).
+type countWriter struct{ n int64 }
+
+func (c *countWriter) Write(p []byte) (int, error) {
+	c.n += int64(len(p))
+	return len(p), nil
 }
 
 // basePosition reads the end Position recorded in the base dump's envelope. The
 // next incremental resumes from here: WALEnd for Postgres, BinlogFile+BinlogEnd
 // for MySQL/MariaDB.
-func basePosition(d Deps, baseID string) (canonical.Position, error) {
-	f, err := os.Open(d.Dumps.Path(baseID))
+func basePosition(ctx context.Context, d Deps, baseID string) (canonical.Position, error) {
+	rc, err := d.Dumps.OpenDump(ctx, baseID)
 	if err != nil {
 		return canonical.Position{}, err
 	}
-	defer func() { _ = f.Close() }()
-	env, _, err := dumps.ReadEnvelope(f)
+	defer func() { _ = rc.Close() }()
+	env, _, err := dumps.ReadEnvelope(rc)
 	if err != nil {
 		return canonical.Position{}, err
 	}

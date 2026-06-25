@@ -1,6 +1,9 @@
 package modals
 
 import (
+	"context"
+	"time"
+
 	"github.com/charmbracelet/huh"
 
 	"github.com/nixrajput/siphon/internal/app"
@@ -25,7 +28,11 @@ func NewRestore(d app.Deps, defaultProfile, defaultDump string) (*huh.Form, *Res
 	res := &RestoreResult{Profile: defaultProfile, DumpID: defaultDump}
 
 	var dumpIDField huh.Field
-	metas, err := d.Dumps.List()
+	// Bound the catalog list: with S3 storage this is a network call, and the
+	// TUI form must not hang the UI on a slow/unreachable backend.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	metas, err := d.Dumps.List(ctx)
 	if err == nil && len(metas) > 0 {
 		opts := make([]huh.Option[string], len(metas))
 		for i, m := range metas {
