@@ -135,6 +135,17 @@ type ProfileConfig struct {
 	SSLMode   string           `yaml:"sslmode"`
 	Group     string           `yaml:"group"`
 	Retention *RetentionConfig `yaml:"retention,omitempty"` // overrides Defaults.Retention wholesale
+	Tunnel    *TunnelConfig    `yaml:"tunnel,omitempty"`    // optional SSH bastion for reaching this DB
+}
+
+// TunnelConfig describes an SSH bastion through which this profile's database is
+// reached. `siphon tunnel <profile>` opens an `ssh -L` local forward from
+// LocalPort to the profile's Host:Port via Bastion, using the system ssh client
+// (so the user's ssh config, keys, and agent apply). It is delegation, not a
+// reimplementation of SSH.
+type TunnelConfig struct {
+	Bastion   string `yaml:"bastion"`              // [user@]host[:port] of the SSH jump host
+	LocalPort int    `yaml:"local_port,omitempty"` // local forward port (defaults to the DB port)
 }
 
 type GroupConfig struct {

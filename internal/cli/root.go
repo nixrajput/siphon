@@ -194,14 +194,6 @@ func buildStore(cfg *config.Config) (storage.Store, error) {
 	return storage.NewLocal(dumpDir)
 }
 
-func newTunnelCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "tunnel",
-		Short: "SSH tunnel helper (Phase G)",
-		RunE:  func(*cobra.Command, []string) error { return fmt.Errorf("tunnel: not implemented (Phase G)") },
-	}
-}
-
 // Execute runs the root command using stdout/stderr and returns the POSIX
 // exit code. It is the only function main() calls.
 //
