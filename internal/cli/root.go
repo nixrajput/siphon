@@ -194,14 +194,6 @@ func buildStore(cfg *config.Config) (storage.Store, error) {
 	return storage.NewLocal(dumpDir)
 }
 
-func newScheduleCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "schedule",
-		Short: "Cron-managed recurring backups (Phase G)",
-		RunE:  func(*cobra.Command, []string) error { return fmt.Errorf("schedule: not implemented (Phase G)") },
-	}
-}
-
 func newTunnelCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "tunnel",
