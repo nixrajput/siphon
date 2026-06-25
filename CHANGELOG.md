@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase G (ops) — **multi-backend secrets** (final G cycle): two new secret-ref backends on the existing resolver seam, so passwords can come from a credential store instead of config.
+  - **OS keychain** (`keychain://<account>` or `keychain://<service>/<account>`) via `go-keyring` — macOS Keychain, Windows Credential Manager, Linux Secret Service. No config, no network; short form looks up service `siphon`.
+  - **AWS Secrets Manager** (`awssm://<secret-id>`, or `awssm://<secret-id>#<json-key>` to pull one field of a JSON secret) via the AWS SDK, reusing the same credential chain as S3 storage. Off by default; enable with `secrets.awssm: true` (+ optional `awssm_region`).
+  - Registered in resolution order `env → keychain → awssm → passthrough`; an unknown scheme still falls through to a literal value. Backends unit-tested via the keyring mock and a faked Secrets Manager client (no real cloud). See [docs/OPS.md](docs/OPS.md#secret-backends). **Phase G (ops pillar) is now complete.**
+
 - Phase G (ops) — **operational suite** (audit, 2FA gating, telemetry, schedule, tunnel):
   - **Audit log** (`internal/audit`): an append-only JSONL trail of destructive ops (backup/restore/sync/prune) recording who/what/when/outcome, via a single `guardedOp` interception seam wired into the verbs. Off by default; enable with the `audit:` config block. The same seam is reused by 2FA gating and telemetry (no per-feature re-wrapping).
   - **2FA / group gating** (`internal/twofactor`): a profile's group can require a typed-name confirmation (`confirm_destructive`) and/or a TOTP code (`require_2fa`) before a destructive op runs. Stdlib RFC 6238 TOTP (HMAC-SHA1, 30s, 6 digits, ±1-step skew), no new dependency; the group's `totp_secret` is a secret-ref. `require_2fa` with no resolvable secret fails closed.

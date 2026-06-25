@@ -4,8 +4,39 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/zalando/go-keyring"
+
 	"github.com/nixrajput/siphon/internal/errs"
 )
+
+// TestResolver_FullChainDispatch wires the production-shaped backend chain
+// (env, keychain, awssm, passthrough) and confirms each scheme routes to its
+// backend — and that a literal still falls through to passthrough at the end.
+func TestResolver_FullChainDispatch(t *testing.T) {
+	keyring.MockInit()
+	_ = keyring.Set("siphon", "kc-key", "from-keychain")
+	t.Setenv("RES_ENV", "from-env")
+
+	r := NewResolver(
+		Env{},
+		Keychain{},
+		&AWSSM{client: fakeSM{values: map[string]string{"sm-id": "from-awssm"}}},
+		Passthrough{},
+	)
+
+	cases := map[string]string{
+		"env:RES_ENV":          "from-env",
+		"keychain://kc-key":    "from-keychain",
+		"awssm://sm-id":        "from-awssm",
+		"just-a-literal-value": "just-a-literal-value", // passthrough
+	}
+	for ref, want := range cases {
+		got, err := r.Resolve(ref)
+		if err != nil || got != want {
+			t.Errorf("Resolve(%q) = (%q, %v), want (%q, nil)", ref, got, err, want)
+		}
+	}
+}
 
 func TestResolver_Passthrough_LiteralValue(t *testing.T) {
 	r := NewResolver(Passthrough{}, Env{})

@@ -120,3 +120,51 @@ siphon tunnel prod
 Run it in one terminal and point a client (or another siphon command) at the
 printed local address in another. siphon delegates to `ssh -L` rather than
 reimplementing SSH or holding a connection in a daemon.
+
+## Secret backends
+
+Any profile field that holds a secret (today: the password) is a **secret-ref**,
+resolved at runtime by a pluggable backend keyed on the ref's scheme. The config
+file therefore never has to contain a plaintext secret. A ref matching no known
+scheme is treated as a literal value, so an ordinary password still works.
+
+| Scheme | Ref shape | Resolves from |
+| --- | --- | --- |
+| `env` | `env:VAR` | the `VAR` environment variable |
+| `keychain` | `keychain://<account>` or `keychain://<service>/<account>` | the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service) |
+| `awssm` | `awssm://<secret-id>` or `awssm://<secret-id>#<json-key>` | AWS Secrets Manager |
+| *(none)* | `hunter2` | a literal value (passthrough) |
+
+```yaml
+profiles:
+  prod:
+    driver: postgres
+    password: keychain://prod-db        # OS keychain, service "siphon", account "prod-db"
+  staging:
+    driver: postgres
+    password: awssm://staging/db#password   # the "password" field of a JSON secret
+```
+
+**OS keychain** (`keychain://`) needs no config and no network — it reads the
+local credential store via a cross-platform keyring. The short form
+`keychain://<account>` looks up service `siphon`; the two-segment form addresses
+any stored credential. Store one with your OS tools (e.g.
+`security add-generic-password -s siphon -a prod-db -w` on macOS).
+
+**AWS Secrets Manager** (`awssm://`) is **off by default** — enable it so a
+machine without AWS credentials doesn't pay the config-load cost:
+
+```yaml
+secrets:
+  awssm: true
+  awssm_region: us-east-1   # optional; defaults to the AWS credential chain's region
+```
+
+It reuses the standard AWS credential chain (the same one S3 storage uses), so
+no separate credentials live in config. The `#<json-key>` selector extracts one
+field from a JSON secret — common for Secrets Manager entries like
+`{"username":...,"password":...}` — so a ref resolves to the field a DSN needs
+rather than the whole blob.
+
+A missing key, unknown field, or non-string field is a clear user error; a
+backend/transport failure is a system error.

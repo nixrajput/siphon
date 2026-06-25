@@ -17,6 +17,7 @@ type Config struct {
 	Storage   StorageConfig            `yaml:"storage"`
 	Audit     AuditConfig              `yaml:"audit"`
 	Telemetry TelemetryConfig          `yaml:"telemetry"`
+	Secrets   SecretsConfig            `yaml:"secrets"`
 	Profiles  map[string]ProfileConfig `yaml:"profiles"`
 	Groups    map[string]GroupConfig   `yaml:"groups"`
 }
@@ -26,6 +27,15 @@ type Config struct {
 type AuditConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path,omitempty"`
+}
+
+// SecretsConfig enables optional secret backends. The keychain:// backend is
+// always available (no config, no network). AWS Secrets Manager (awssm://) is
+// gated by AWSSM because constructing it loads AWS config; off by default so a
+// machine without AWS creds doesn't pay that cost or fail at startup.
+type SecretsConfig struct {
+	AWSSM       bool   `yaml:"awssm"`                  // enable the awssm:// backend
+	AWSSMRegion string `yaml:"awssm_region,omitempty"` // optional; defaults to the AWS chain's region
 }
 
 // TelemetryConfig controls opt-in aggregate operational metrics (per-op counts
