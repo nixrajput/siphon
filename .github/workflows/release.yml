@@ -35,7 +35,9 @@ jobs:
       - name: Test
         run: go test ./... github.com/nixrajput/siphon/internal/driver/_mysqlcommon
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2 # match ci.yml; v2 is built with current Go (go.mod targets 1.26)
       - name: GoReleaser check
         uses: goreleaser/goreleaser-action@v6
         with:
