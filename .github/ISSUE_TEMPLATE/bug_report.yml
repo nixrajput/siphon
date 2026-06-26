@@ -1,0 +1,63 @@
+name: Bug report
+description: Something siphon did wrong — a crash, wrong output, or a failed operation.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please include enough to reproduce — siphon shells
+        out to native dump/restore tools, so the exact command and engine matter.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran and what went wrong. Paste the command and the error.
+      placeholder: |
+        $ siphon backup prod
+        ✗ ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: siphon version
+      description: Output of `siphon --version`.
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Database engine
+      options:
+        - PostgreSQL
+        - MySQL
+        - MariaDB
+        - Cross-engine (specify in details)
+        - Not engine-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true
+  - type: input
+    id: exit-code
+    attributes:
+      label: Exit code
+      description: siphon uses a POSIX exit-code taxonomy; the number helps classify the failure.
+      placeholder: "e.g. 1 (user), 70 (system), 65 (integrity)"
+  - type: textarea
+    id: details
+    attributes:
+      label: Anything else
+      description: Profile config (redact secrets), storage backend, logs, repro steps.

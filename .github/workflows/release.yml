@@ -1,0 +1,90 @@
+name: Release
+
+# Auto-releases when a version tag (vX.Y.Z) is pushed. GoReleaser builds the
+# cross-platform binaries, SHA-256 checksums, and cosign-keyless signatures,
+# publishes a GitHub Release, and — when the tap repos + tokens exist — pushes
+# the Homebrew formula and Scoop manifest.
+#
+# A validation gate (test + lint + config check) runs first, so a broken tag
+# never publishes. workflow_dispatch runs a snapshot dry-run (no publish) to
+# rehearse a release without tagging.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  # Gate: the same checks CI runs, plus goreleaser config validation. The
+  # release job depends on this, so a failing test/lint aborts before publish.
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false # don't leave the token in .git/config
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod # reproducible: pin the toolchain to go.mod
+          cache: true
+      - name: Test
+        run: go test ./... github.com/nixrajput/siphon/internal/driver/_mysqlcommon
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+      - name: GoReleaser check
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
+  release:
+    name: Release
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+      id-token: write # cosign keyless signing via GitHub OIDC
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false # don't leave the token in .git/config # GoReleaser needs full history + tags for the changelog
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod # reproducible: pin the toolchain to go.mod
+          cache: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # On a tag push: full release. On manual dispatch: snapshot dry-run that
+      # builds everything locally and publishes nothing (rehearsal).
+      - name: Set release args
+        id: args
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "args=release --clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=release --clean --snapshot" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: ${{ steps.args.outputs.args }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tap-push tokens. These secrets may be unset on early releases; a
+          # GitHub Actions secret expression yields "" when absent, so the
+          # GoReleaser token template still resolves and skip_upload: auto
+          # quietly skips the brew/scoop push instead of erroring. Provision
+          # these (PATs with repo scope on the tap repos) to enable publishing.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          SCOOP_TAP_GITHUB_TOKEN: ${{ secrets.SCOOP_TAP_GITHUB_TOKEN }}

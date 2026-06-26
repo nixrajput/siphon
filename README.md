@@ -47,20 +47,20 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Project status
 
-| Phase                             | What it delivers                                                                                                                                                                                                                                                                                                                                                                                                                        | Status      |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI                                                                                                                                                                                                                                                                         | ✅ Complete |
-| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                                                                                                                                                                                                                                                                                    | ✅ Complete |
-| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                                                                                                                                                                                                                                                                                       | ✅ Complete |
-| **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide                                                                                                                                                                                                                                                         | ✅ Complete |
-| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness                                                                                                                                                                                                                                                             | ✅ Complete |
-| **F** — Advanced transfer         | All four advanced-transfer modes work end-to-end: bounded-buffer streaming sync; **incremental** backup/restore (`backup --incremental --base <id>` captures a bounded change set via Postgres logical decoding / MySQL-MariaDB binlog, `restore` replays the base→incremental chain, Postgres orphan-slot sweep); **cross-engine** sync (`sync --cross-engine` — typed `SchemaInspector` introspection → canonical type-mapping, e.g. Postgres → MySQL); and **CDC** (`siphon cdc` / `sync --continuous` — unbounded change streaming with snapshot→stream handoff, resumable, same- and cross-engine). Live DB paths are integration-tested in CI — see [docs/INCREMENTAL.md](docs/INCREMENTAL.md), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md), [docs/CDC.md](docs/CDC.md) | ✅ Complete |
-| **G** — Ops features              | **Cloud storage** (✅): the dump catalog can live in an S3 / S3-compatible bucket via a pluggable `storage.Store` backend (local + S3; GCS/Azure are a fast-follow), `storage:` config block, SHA-256 integrity end-to-end — see [docs/STORAGE.md](docs/STORAGE.md). **Retention** (✅): chain-aware pruning (`siphon dumps prune`) with keep-last-N / max-age / GFS rules, per-profile `retention:` config; see [docs/RETENTION.md](docs/RETENTION.md). **Ops suite** (✅): an append-only **audit log** of destructive ops (`audit:` config), **2FA/group gating** (a profile group can require a typed confirmation and/or TOTP before destructive ops), opt-in aggregate **telemetry** (`telemetry:` config), **`siphon schedule`** (manages recurring backups in your crontab), and **`siphon tunnel`** (SSH local-forward to a DB via a bastion). **Multi-backend secrets** (✅): `keychain://` (OS credential store) and `awssm://` (AWS Secrets Manager) join `env:` as secret-ref schemes. See [docs/OPS.md](docs/OPS.md).                                                                                                                                                                                                                                                              | ✅ Complete |
-| **H** — Distribution              | GoReleaser, Homebrew tap, Scoop bucket, install script, docs site                                                                                                                                                                                                                                                                                                                                                                       | ⏳ Planned  |
+| Phase                             | What it delivers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Status         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **A** — Skeleton                  | Go module, Cobra CLI, TUI placeholder, `Driver` interface + registry, `errs`/`config`/`secrets`/`profile` packages, golangci-lint + depguard, cross-platform CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ Complete    |
+| **B** — Postgres walking skeleton | `backup`, `restore`, `sync`, `verify`, `inspect`, `dumps`, `config`, `profile` working end-to-end against PostgreSQL                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ Complete    |
+| **C** — TUI dashboard             | Multi-panel Bubble Tea dashboard (profiles · dumps · jobs) with live job progress, backup/restore modal forms, and snapshot tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ✅ Complete    |
+| **D** — Driver hardening          | Shared cross-driver test harness (`RunDriverSuite`), capability-gating helper (`RequireCapability`), Postgres connection-probe retry, and a `docs/DRIVERS.md` contributor guide                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ Complete    |
+| **E** — MySQL + MariaDB           | Both drivers via a shared `_mysqlcommon` package (shared `Conn`, `mysqldump`/`mariadb-dump` backup, client-pipe restore), exercised by the Phase D `RunDriverSuite` harness                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ Complete    |
+| **F** — Advanced transfer         | All four advanced-transfer modes work end-to-end: bounded-buffer streaming sync; **incremental** backup/restore (`backup --incremental --base <id>` captures a bounded change set via Postgres logical decoding / MySQL-MariaDB binlog, `restore` replays the base→incremental chain, Postgres orphan-slot sweep); **cross-engine** sync (`sync --cross-engine` — typed `SchemaInspector` introspection → canonical type-mapping, e.g. Postgres → MySQL); and **CDC** (`siphon cdc` / `sync --continuous` — unbounded change streaming with snapshot→stream handoff, resumable, same- and cross-engine). Live DB paths are integration-tested in CI — see [docs/INCREMENTAL.md](docs/INCREMENTAL.md), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md), [docs/CDC.md](docs/CDC.md)                                                                                                                                                                                                                                                      | ✅ Complete    |
+| **G** — Ops features              | **Cloud storage** (✅): the dump catalog can live in an S3 / S3-compatible bucket via a pluggable `storage.Store` backend (local + S3; GCS/Azure are a fast-follow), `storage:` config block, SHA-256 integrity end-to-end — see [docs/STORAGE.md](docs/STORAGE.md). **Retention** (✅): chain-aware pruning (`siphon dumps prune`) with keep-last-N / max-age / GFS rules, per-profile `retention:` config; see [docs/RETENTION.md](docs/RETENTION.md). **Ops suite** (✅): an append-only **audit log** of destructive ops (`audit:` config), **2FA/group gating** (a profile group can require a typed confirmation and/or TOTP before destructive ops), opt-in aggregate **telemetry** (`telemetry:` config), **`siphon schedule`** (manages recurring backups in your crontab), and **`siphon tunnel`** (SSH local-forward to a DB via a bastion). **Multi-backend secrets** (✅): `keychain://` (OS credential store) and `awssm://` (AWS Secrets Manager) join `env:` as secret-ref schemes. See [docs/OPS.md](docs/OPS.md). | ✅ Complete    |
+| **H** — Distribution              | GoReleaser (cross-platform binaries, checksums, cosign-keyless signatures, tag-triggered release workflow), Homebrew tap + Scoop bucket, a checksum-verifying `curl \| sh` install script, and a Next.js landing + docs site (in `web/`, deployed on Vercel, rendering the repo Markdown). Tooling is in the repo; publishing awaits the `v1.0.0` tag + owner provisioning (tap repos/tokens, Vercel) — see [`web/README.md`](web/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 🟡 In progress |
 
 ## Requirements
 
-- **[Go](https://go.dev/dl/) 1.26 or newer** — to build from source (the only install method until Phase H).
+- **[Go](https://go.dev/dl/) 1.26 or newer** — only needed to build from source; prebuilt binaries are available via the install script, Homebrew, and Scoop (see [Install](#install)).
 - **Database client tools** — siphon shells out to the native dump/restore tools; it does not embed a client. You only need the tools for the engines you actually use:
   - **PostgreSQL** profiles need `pg_dump`, `pg_restore`, `psql`.
   - **MySQL** profiles need `mysqldump`, `mysql`.
@@ -77,16 +77,51 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Install
 
-> Pre-1.0: no Homebrew tap or prebuilt binaries yet. Build from source.
+> The install script, Homebrew tap, and Scoop bucket below go live with the first `v1.0.0` release. Until then, [build from source](#from-source).
+
+**Linux / macOS** — the install script downloads the right release binary and verifies its SHA-256 before installing:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nixrajput/siphon/main/scripts/install.sh | sh
+```
+
+Override the target with `SIPHON_INSTALL_DIR=…` or pin a version with `SIPHON_VERSION=v1.0.0`. (Once the site is live, `https://siphon.dev/install.sh` redirects here.)
+
+**Homebrew:**
+
+```bash
+brew install nixrajput/siphon/siphon
+```
+
+**Scoop (Windows):**
+
+```powershell
+scoop bucket add siphon https://github.com/nixrajput/scoop-siphon
+scoop install siphon
+```
+
+**Prebuilt binaries** for every OS/arch are attached to each [release](https://github.com/nixrajput/siphon/releases), with a `checksums.txt` and a cosign keyless signature. Verify provenance — pin the issuer **and** the signer identity, or a forged Fulcio cert would still pass:
+
+```bash
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --certificate-identity "https://github.com/nixrajput/siphon/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  checksums.txt
+```
+
+Substitute the tag you downloaded for `v1.0.0`. Then check a binary's archive against the verified `checksums.txt`.
+
+**From source:**
 
 ```bash
 git clone https://github.com/nixrajput/siphon.git
-cd siphon
-make build
+cd siphon && make build
 ./bin/siphon --version
 ```
 
-This produces `./bin/siphon`. Move it onto your `PATH` (e.g. `sudo install -m 0755 bin/siphon /usr/local/bin/siphon`) to call it as `siphon`.
+This produces `./bin/siphon`; move it onto your `PATH` (e.g. `sudo install -m 0755 bin/siphon /usr/local/bin/siphon`).
 
 ## Quick start
 
@@ -172,11 +207,11 @@ By default the dump catalog lives on local disk at `defaults.dump_dir`. To store
 
 ```yaml
 storage:
-  type: s3                # "local" (default) | "s3"
+  type: s3 # "local" (default) | "s3"
   bucket: my-siphon-dumps # required for s3
-  prefix: prod            # optional key prefix
+  prefix: prod # optional key prefix
   region: us-east-1
-  endpoint: ""            # optional: custom endpoint for MinIO / R2
+  endpoint: "" # optional: custom endpoint for MinIO / R2
 ```
 
 Credentials are resolved from the standard AWS chain (env vars, `~/.aws`, instance role) — never stored in the config file. See [docs/STORAGE.md](docs/STORAGE.md) for details.
@@ -187,7 +222,7 @@ A `retention:` block (default + optional per-profile override) drives `siphon du
 defaults:
   retention:
     keep_last: 7
-    max_age: 720h            # 30 days
+    max_age: 720h # 30 days
     gfs: { daily: 7, weekly: 4, monthly: 6 }
 ```
 

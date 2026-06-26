@@ -41,4 +41,14 @@ tidy: ## Run go mod tidy
 clean: ## Remove build artifacts
 	rm -rf bin/ dist/ coverage.out coverage.html
 
-.PHONY: help lint test test-verbose test-integration build run install tidy clean
+hooks: ## Enable the committed git hooks (one-time, per clone)
+	git config core.hooksPath .githooks
+	@echo "git hooks enabled (core.hooksPath=.githooks)"
+
+web-lint: ## Lint the web/ app (ESLint)
+	cd web && npm run lint
+
+web-format: ## Format the web/ app (Prettier)
+	cd web && npm run format
+
+.PHONY: help lint test test-verbose test-integration build run install tidy clean hooks web-lint web-format

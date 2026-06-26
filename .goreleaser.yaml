@@ -1,0 +1,109 @@
+# GoReleaser v2 configuration — https://goreleaser.com
+# Drives the release: cross-platform binaries, archives, SHA-256 checksums,
+# cosign-keyless signatures, a GitHub Release, and (when the tap repos +
+# token exist) a Homebrew formula and Scoop manifest.
+#
+# Run locally (no publish): goreleaser release --snapshot --clean
+# Validate config:          goreleaser check
+version: 2
+
+project_name: siphon
+
+# No `go mod tidy` before-hook: the release path stays read-only so the
+# published binary is built from exactly the committed dependency graph at the
+# tagged revision (CI enforces tidiness separately).
+
+builds:
+  - id: siphon
+    main: ./cmd/siphon
+    binary: siphon
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    # Match the version symbol the Makefile already injects, so a released
+    # binary's `siphon --version` reports the tag (not "0.0.1-dev").
+    ldflags:
+      - -s -w
+      - -X github.com/nixrajput/siphon/internal/cli.Version={{.Version}}
+
+archives:
+  - id: siphon
+    formats: [tar.gz]
+    # Windows users expect .zip.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# Cosign keyless signing of the checksums file. The release workflow grants
+# id-token: write so cosign authenticates via GitHub's OIDC — no key to manage.
+# Verify with: cosign verify-blob --certificate checksums.txt.pem \
+#   --signature checksums.txt.sig --certificate-identity-regexp ... checksums.txt
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    output: true
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+
+release:
+  github:
+    owner: nixrajput
+    name: siphon
+  prerelease: auto # tags like v1.0.0-rc1 → marked prerelease automatically
+
+# Homebrew tap. Publishes to a SEPARATE repo (nixrajput/homebrew-siphon) using
+# a PAT in HOMEBREW_TAP_GITHUB_TOKEN. skip_upload: auto means snapshots and
+# prereleases do NOT push the formula, so the core release succeeds even before
+# the tap repo / token exist — light up brew on a later stable release.
+brews:
+  - name: siphon
+    repository:
+      owner: nixrajput
+      name: homebrew-siphon
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/nixrajput/siphon"
+    description: "Sync any database, anywhere — backup, restore, and sync across engines."
+    license: "MIT"
+    skip_upload: auto
+    install: |
+      bin.install "siphon"
+    test: |
+      system "#{bin}/siphon", "--version"
+
+# Scoop bucket (Windows). Publishes to nixrajput/scoop-siphon via
+# SCOOP_TAP_GITHUB_TOKEN; same skip_upload: auto tolerance as brew.
+scoops:
+  - name: siphon
+    repository:
+      owner: nixrajput
+      name: scoop-siphon
+      token: "{{ .Env.SCOOP_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/nixrajput/siphon"
+    description: "Sync any database, anywhere — backup, restore, and sync across engines."
+    license: "MIT"
+    skip_upload: auto

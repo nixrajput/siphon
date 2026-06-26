@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase H (distribution) — release tooling + landing/docs site (publishing awaits the `v1.0.0` tag + owner provisioning):
+  - **GoReleaser** (`.goreleaser.yaml`, v2): cross-platform builds (linux/darwin/windows × amd64/arm64), tar.gz/zip archives, a SHA-256 `checksums.txt`, and **cosign-keyless** signing of the checksums (GitHub OIDC, no key to manage). The version ldflags match the symbol the Makefile injects, so a released binary's `--version` reports its tag.
+  - **Release workflow** (`.github/workflows/release.yml`): triggers on a `v*` tag, pins GoReleaser ~> v2, installs cosign, and grants `contents: write` + `id-token: write`. Tap-push tokens resolve to empty when unset so a first release without taps doesn't error (`skip_upload: auto`).
+  - **Homebrew tap + Scoop bucket** blocks publishing to `nixrajput/homebrew-siphon` and `nixrajput/scoop-siphon`.
+  - **Install script** (`scripts/install.sh`): POSIX `curl | sh` that detects OS/arch, resolves the latest release, and **verifies the archive's SHA-256 before installing** (refuses on mismatch).
+  - **Landing + docs site** (`web/`): a Next.js (App Router) + Tailwind app deployed on Vercel. The docs pages render the repository's own `docs/*.md` at build time (single source of truth). README install section, CHANGELOG, and `web/README.md` (with the owner provisioning checklist) updated.
+
 - Phase G (ops) — **multi-backend secrets** (final G cycle): two new secret-ref backends on the existing resolver seam, so passwords can come from a credential store instead of config.
   - **OS keychain** (`keychain://<account>` or `keychain://<service>/<account>`) via `go-keyring` — macOS Keychain, Windows Credential Manager, Linux Secret Service. No config, no network; short form looks up service `siphon`.
   - **AWS Secrets Manager** (`awssm://<secret-id>`, or `awssm://<secret-id>#<json-key>` to pull one field of a JSON secret) via the AWS SDK, reusing the same credential chain as S3 storage. Off by default; enable with `secrets.awssm: true` (+ optional `awssm_region`).
