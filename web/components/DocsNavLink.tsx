@@ -23,10 +23,10 @@ export function DocsNavLink({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`block rounded px-2 py-1 text-sm no-underline transition-colors hover:bg-[var(--ink-2)] hover:text-[var(--paper)] hover:no-underline ${
+      className={`block rounded px-2 py-1 text-sm no-underline transition-colors hover:bg-(--ink-2) hover:text-(--paper) hover:no-underline ${
         active
-          ? "border-l-2 border-[var(--flow)] bg-[var(--ink-2)] pl-2.5 font-medium text-[var(--paper)]"
-          : "text-[var(--muted)]"
+          ? "border-l-2 border-(--flow) bg-(--ink-2) pl-2.5 font-medium text-(--paper)"
+          : "text-(--muted)"
       }`}
     >
       {children}

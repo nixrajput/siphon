@@ -18,7 +18,7 @@ export default function DocsIndex() {
     <main>
       <p className="eyebrow mb-3">documentation</p>
       <h1 className="mb-4 text-4xl">Concepts &amp; guides</h1>
-      <p className="mb-8 max-w-2xl leading-relaxed text-[var(--muted)]">
+      <p className="mb-8 max-w-2xl leading-relaxed text-(--muted)">
         Everything you need to run siphon in anger — from your first backup to continuous
         cross-engine replication. These pages render the same Markdown that ships in the repository,
         so they track the latest source.
@@ -26,11 +26,11 @@ export default function DocsIndex() {
 
       {/* Quick start: get someone to a working install without leaving the
           Overview, then point them at the first guide. */}
-      <div className="mb-12 rounded-xl border border-[var(--line)] bg-[var(--ink-2)] p-6">
+      <div className="mb-12 rounded-xl border border-(--line) bg-(--ink-2) p-6">
         <p className="eyebrow mb-3">quick start</p>
-        <p className="mb-4 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
+        <p className="mb-4 max-w-xl text-sm leading-relaxed text-(--muted)">
           Install the binary, then head to{" "}
-          <Link href="/docs/getting-started" className="text-[var(--flow)]">
+          <Link href="/docs/getting-started" className="text-(--flow)">
             Getting started
           </Link>{" "}
           for your first backup and sync.
@@ -53,15 +53,15 @@ export default function DocsIndex() {
                 <Link
                   key={d.slug}
                   href={`/docs/${d.slug}`}
-                  className="group block rounded-xl border border-[var(--line)] bg-[var(--ink-2)]/40 p-5 no-underline transition-colors hover:border-[var(--flow)] hover:bg-[var(--ink-2)] hover:no-underline"
+                  className="group block rounded-xl border border-(--line) bg-(--ink-2)/40 p-5 no-underline transition-colors hover:border-(--flow) hover:bg-(--ink-2) hover:no-underline"
                 >
-                  <span className="flex items-center gap-2 text-lg font-semibold text-[var(--paper)]">
+                  <span className="flex items-center gap-2 text-lg font-semibold text-(--paper)">
                     {d.title}
-                    <span className="text-[var(--flow)] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100">
+                    <span className="text-(--flow) opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100">
                       →
                     </span>
                   </span>
-                  <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">{d.blurb}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-(--muted)">{d.blurb}</p>
                 </Link>
               ))}
             </div>
@@ -69,15 +69,15 @@ export default function DocsIndex() {
         );
       })}
 
-      <div className="mt-12 flex flex-col gap-3 border-t border-[var(--line)] pt-8 text-sm text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-12 flex flex-col gap-3 border-t border-(--line) pt-8 text-sm text-(--muted) sm:flex-row sm:items-center sm:justify-between">
         <span>
           Found a gap or a bug?{" "}
-          <ExtLink href={`${REPO_URL}/issues`} className="text-[var(--flow)]">
+          <ExtLink href={`${REPO_URL}/issues`} className="text-(--flow)">
             Open an issue
           </ExtLink>
           .
         </span>
-        <ExtLink href={REPO_URL} className="text-[var(--flow)]">
+        <ExtLink href={REPO_URL} className="text-(--flow)">
           Browse the source ↗
         </ExtLink>
       </div>

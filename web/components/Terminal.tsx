@@ -20,12 +20,12 @@ const SESSION: Line[] = [
 
 export function Terminal() {
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[#0a111e] shadow-2xl">
-      <div className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-(--line) bg-[#0a111e] shadow-2xl">
+      <div className="flex items-center gap-2 border-b border-(--line) px-4 py-3">
         <span className="h-3 w-3 rounded-full bg-[#ff5f56]" aria-hidden />
         <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" aria-hidden />
         <span className="h-3 w-3 rounded-full bg-[#27c93f]" aria-hidden />
-        <span className="ml-3 font-mono text-xs text-[var(--muted)]">siphon — zsh</span>
+        <span className="ml-3 font-mono text-xs text-(--muted)">siphon — zsh</span>
       </div>
       <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.82rem] leading-relaxed">
         <code>
@@ -37,20 +37,20 @@ export function Terminal() {
             <span key={i} className="term-line block" style={{ "--i": i } as React.CSSProperties}>
               {line.kind === "cmd" && (
                 <span>
-                  <span className="text-[var(--amber)]">$ </span>
-                  <span className="text-[var(--paper)]">{line.text}</span>
+                  <span className="text-(--amber)">$ </span>
+                  <span className="text-(--paper)">{line.text}</span>
                 </span>
               )}
-              {line.kind === "out" && <span className="text-[var(--muted)]">{line.text}</span>}
-              {line.kind === "flow" && <span className="text-[var(--flow)]">{line.text}</span>}
+              {line.kind === "out" && <span className="text-(--muted)">{line.text}</span>}
+              {line.kind === "flow" && <span className="text-(--flow)">{line.text}</span>}
             </span>
           ))}
           <span
             className="term-line block"
             style={{ "--i": SESSION.length } as React.CSSProperties}
           >
-            <span className="text-[var(--amber)]">$ </span>
-            <span className="caret text-[var(--paper)]">▋</span>
+            <span className="text-(--amber)">$ </span>
+            <span className="caret text-(--paper)">▋</span>
           </span>
         </code>
       </pre>

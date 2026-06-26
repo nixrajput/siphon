@@ -15,15 +15,15 @@ export function HeroInstall() {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-[var(--muted)]">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-(--muted)">
         <ExtLink
           href={`${REPO_URL}/releases`}
-          className="inline-flex items-center gap-2 no-underline hover:text-[var(--paper)]"
+          className="inline-flex items-center gap-2 no-underline hover:text-(--paper)"
         >
-          <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-[var(--flow)]" aria-hidden />
+          <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-(--flow)" aria-hidden />
           {/* Show the real tag + "latest release" once one exists; until then show
               neutral "unreleased" rather than claiming a version that isn't out. */}
-          <span className="text-[var(--flow)]">{version ?? "unreleased"}</span>
+          <span className="text-(--flow)">{version ?? "unreleased"}</span>
           {version && <span>latest release</span>}
         </ExtLink>
         {/* Star count is genuinely unknown until the fetch lands: shimmer while
@@ -33,7 +33,7 @@ export function HeroInstall() {
         ) : (
           stars !== null &&
           stars > 0 && (
-            <ExtLink href={REPO_URL} className="no-underline hover:text-[var(--paper)]">
+            <ExtLink href={REPO_URL} className="no-underline hover:text-(--paper)">
               ★ {stars.toLocaleString()} on GitHub
             </ExtLink>
           )

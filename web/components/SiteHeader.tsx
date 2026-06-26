@@ -21,13 +21,13 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--ink)]/85 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-(--line) bg-(--ink)/85 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link
           href="/"
-          className="font-mono text-lg font-bold tracking-tight text-[var(--paper)] no-underline hover:no-underline"
+          className="font-mono text-lg font-bold tracking-tight text-(--paper) no-underline hover:no-underline"
         >
-          <span className="text-[var(--flow)]">~/</span>
+          <span className="text-(--flow)">~/</span>
           {SITE_NAME}
         </Link>
 
@@ -66,13 +66,13 @@ export function SiteHeader() {
         >
           <span className="block space-y-1.5">
             <span
-              className={`block h-0.5 w-6 bg-[var(--paper)] transition-transform ${open ? "translate-y-2 rotate-45" : ""}`}
+              className={`block h-0.5 w-6 bg-(--paper) transition-transform ${open ? "translate-y-2 rotate-45" : ""}`}
             />
             <span
-              className={`block h-0.5 w-6 bg-[var(--paper)] transition-opacity ${open ? "opacity-0" : ""}`}
+              className={`block h-0.5 w-6 bg-(--paper) transition-opacity ${open ? "opacity-0" : ""}`}
             />
             <span
-              className={`block h-0.5 w-6 bg-[var(--paper)] transition-transform ${open ? "-translate-y-2 -rotate-45" : ""}`}
+              className={`block h-0.5 w-6 bg-(--paper) transition-transform ${open ? "-translate-y-2 -rotate-45" : ""}`}
             />
           </span>
         </button>
@@ -80,14 +80,14 @@ export function SiteHeader() {
 
       {/* Mobile menu */}
       {open && (
-        <nav className="border-t border-[var(--line)] px-6 py-4 sm:hidden">
+        <nav className="border-t border-(--line) px-6 py-4 sm:hidden">
           <ul className="space-y-3 text-sm">
             {NAV.map((item) => (
               <li key={item.label}>
                 {item.external ? (
                   <ExtLink
                     href={item.href}
-                    className="block text-[var(--muted)] no-underline hover:text-[var(--paper)]"
+                    className="block text-(--muted) no-underline hover:text-(--paper)"
                     onClick={() => setOpen(false)}
                   >
                     {item.label}
@@ -96,7 +96,7 @@ export function SiteHeader() {
                   <Link
                     href={item.href}
                     data-active={item.match(pathname)}
-                    className="block text-[var(--muted)] no-underline hover:text-[var(--paper)] data-[active=true]:text-[var(--paper)]"
+                    className="block text-(--muted) no-underline hover:text-(--paper) data-[active=true]:text-(--paper)"
                     onClick={() => setOpen(false)}
                   >
                     {item.label}
@@ -121,9 +121,9 @@ function VersionBadge({ version }: { version: string | null }) {
   return (
     <ExtLink
       href={`${REPO_URL}/releases`}
-      className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--ink-2)] px-3 py-1 font-mono text-xs text-[var(--muted)] no-underline transition-colors hover:border-[var(--flow)] hover:text-[var(--paper)] hover:no-underline"
+      className="inline-flex items-center gap-2 rounded-full border border-(--line) bg-(--ink-2) px-3 py-1 font-mono text-xs text-(--muted) no-underline transition-colors hover:border-(--flow) hover:text-(--paper) hover:no-underline"
     >
-      <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-[var(--flow)]" aria-hidden />
+      <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-(--flow)" aria-hidden />
       {version ?? "unreleased"}
     </ExtLink>
   );
