@@ -28,3 +28,11 @@ export const DEVELOPER = {
 
 // Engines siphon speaks, used by the hero version pill fallback + engines strip.
 export const ENGINES = ["PostgreSQL", "MySQL", "MariaDB"] as const;
+
+// Funding platforms for the Support section, mirroring .github/FUNDING.yml.
+export const FUNDING = [
+  { label: "GitHub Sponsors", url: "https://github.com/sponsors/nixrajput" },
+  { label: "Ko-fi", url: "https://ko-fi.com/nixrajput" },
+  { label: "Buy Me a Coffee", url: "https://www.buymeacoffee.com/nixrajput" },
+  { label: "Open Collective", url: "https://opencollective.com/nixrajput" },
+] as const;

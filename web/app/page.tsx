@@ -5,6 +5,7 @@ import { Terminal } from "@/components/Terminal";
 import { InstallCommand } from "@/components/InstallCommand";
 import { HeroInstall } from "@/components/HeroInstall";
 import { DeveloperSection } from "@/components/DeveloperSection";
+import { SupportSection } from "@/components/SupportSection";
 import { Reveal } from "@/components/Reveal";
 import { ExtLink } from "@/components/ExtLink";
 import { REPO_URL, INSTALL_CMD, ENGINES } from "@/lib/site";
@@ -222,6 +223,8 @@ export default function Home() {
       </section>
 
       <DeveloperSection />
+
+      <SupportSection />
 
       <SiteFooter />
     </>

@@ -31,6 +31,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
   - [Development](#development)
   - [Roadmap](#roadmap)
   - [Contributing](#contributing)
+  - [Support](#support)
   - [License](#license)
 
 ## Why siphon
@@ -281,6 +282,19 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), keep 
 Adding a new database engine? See [docs/DRIVERS.md](docs/DRIVERS.md) for the driver contributor guide.
 
 Concept docs: [docs/INCREMENTAL.md](docs/INCREMENTAL.md) (incremental backup + restore), [docs/CROSS_ENGINE.md](docs/CROSS_ENGINE.md) (cross-engine sync + the type-map matrix), and [docs/CDC.md](docs/CDC.md) (continuous CDC sync, same- and cross-engine). All three work end-to-end; live DB behavior is integration-tested in CI.
+
+## Support
+
+siphon is free and open source. If it saves you time, you can support its continued development — every bit helps and is genuinely appreciated. ❤️
+
+<div align="center">
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_on_GitHub-%23EA4AAA.svg?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/nixrajput)
+[![Ko-fi](https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/nixrajput)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/nixrajput)
+[![Open Collective](https://img.shields.io/badge/Open_Collective-7FADF2?style=for-the-badge&logo=opencollective&logoColor=white)](https://opencollective.com/nixrajput)
+
+</div>
 
 ## License
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { REPO_URL, DEVELOPER, SITE_NAME } from "@/lib/site";
+import { REPO_URL, DEVELOPER, SITE_NAME, FUNDING } from "@/lib/site";
 import { ExtLink } from "@/components/ExtLink";
 
 // The closing credit. Three columns on wide screens — the project, the docs,
@@ -74,6 +74,14 @@ export function SiteFooter() {
                 className="text-(--muted) no-underline hover:text-(--paper)"
               >
                 GitHub (@{DEVELOPER.handle})
+              </ExtLink>
+            </li>
+            <li>
+              <ExtLink
+                href={FUNDING[0].url}
+                className="text-(--muted) no-underline hover:text-(--paper)"
+              >
+                Sponsor
               </ExtLink>
             </li>
           </ul>
