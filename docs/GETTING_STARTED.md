@@ -18,9 +18,11 @@ them — `pg_dump`/`pg_restore`, `mysqldump`/`mysql`, or `mariadb-dump`/`mariadb
 ## Install
 
 ```bash
-curl -fsSL https://siphon.dev/install.sh | sh     # Linux / macOS
-brew install nixrajput/siphon/siphon              # Homebrew
-scoop install siphon                              # Scoop (Windows)
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/nixrajput/siphon/main/scripts/install.sh | sh
+
+brew install nixrajput/siphon/siphon   # Homebrew
+scoop install siphon                   # Scoop (Windows)
 ```
 
 Confirm it's on your `PATH`:
