@@ -78,7 +78,10 @@ export default function Home() {
       <section className="relative overflow-hidden">
         <div className="flowgrid pointer-events-none absolute inset-0 -z-10" aria-hidden />
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-20 lg:grid-cols-2 lg:py-28">
-          <div>
+          {/* min-w-0: a grid item defaults to min-width:auto and won't shrink
+              below its widest child (the long install URL), which would push the
+              whole page wide on mobile. */}
+          <div className="min-w-0">
             <p className="eyebrow rise mb-5">backup · restore · sync · cdc</p>
             <h1
               className="rise text-[2.6rem] leading-[1.05] text-balance sm:text-6xl"
@@ -119,7 +122,7 @@ export default function Home() {
               </ExtLink>
             </div>
           </div>
-          <div className="rise" style={{ "--rise-delay": "400ms" } as React.CSSProperties}>
+          <div className="rise min-w-0" style={{ "--rise-delay": "400ms" } as React.CSSProperties}>
             <Terminal />
           </div>
         </div>
@@ -201,13 +204,13 @@ export default function Home() {
             <InstallCommand command={INSTALL_CMD} />
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
-            <div>
+            <div className="min-w-0">
               <p className="mb-2 font-mono text-xs tracking-widest text-(--muted) uppercase">
                 Homebrew
               </p>
               <InstallCommand command="brew install nixrajput/siphon/siphon" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="mb-2 font-mono text-xs tracking-widest text-(--muted) uppercase">
                 Scoop (Windows)
               </p>

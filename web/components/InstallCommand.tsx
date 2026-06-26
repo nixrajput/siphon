@@ -37,10 +37,10 @@ export function InstallCommand({ command }: { command: string }) {
     <button
       type="button"
       onClick={copy}
-      className="group flex w-full items-center gap-3 rounded-lg border border-(--line) bg-(--ink-2) px-4 py-3 text-left font-mono text-sm transition-colors hover:border-(--amber)"
+      className="group flex w-full items-center gap-2 rounded-lg border border-(--line) bg-(--ink-2) py-2 pr-2 pl-4 text-left font-mono text-sm transition-colors hover:border-(--amber)"
       aria-label={`Copy install command: ${command}`}
     >
-      <span aria-hidden className="text-(--amber) select-none">
+      <span aria-hidden className="shrink-0 text-(--amber) select-none">
         $
       </span>
       {/* min-w-0 lets this flex item shrink below the command's intrinsic
@@ -49,11 +49,17 @@ export function InstallCommand({ command }: { command: string }) {
       <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-(--paper)">
         {command}
       </code>
+      {/* The Copy action reads as a distinct chip — its own border + background,
+          divided from the command — so it's clearly a button, not part of the
+          text. shrink-0 keeps it from being squeezed by a long command. */}
       <span
-        className={`text-xs tracking-widest uppercase select-none ${
-          copied ? "text-(--flow)" : "text-(--muted) group-hover:text-(--amber)"
+        className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs tracking-wide uppercase transition-colors select-none ${
+          copied
+            ? "border-(--flow) text-(--flow)"
+            : "border-(--line) bg-(--ink) text-(--muted) group-hover:border-(--amber) group-hover:text-(--amber)"
         }`}
       >
+        <span aria-hidden>{copied ? "✓" : "⧉"}</span>
         {copied ? "Copied" : "Copy"}
       </span>
     </button>
