@@ -7,7 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "format": "prettier --write \"{app,components,lib}/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"{app,components,lib}/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
     "next": "15.1.3",
@@ -28,6 +31,8 @@
     "postcss": "8.4.49",
     "autoprefixer": "10.4.20",
     "eslint": "9.17.0",
-    "eslint-config-next": "15.1.3"
+    "eslint-config-next": "15.1.3",
+    "prettier": "3.4.2",
+    "prettier-plugin-tailwindcss": "0.6.9"
   }
 }
