@@ -78,24 +78,29 @@ $DL_O "$TMP/$ARCHIVE" "$BASE/$ARCHIVE" || err "download failed: $BASE/$ARCHIVE"
 $DL_O "$TMP/checksums.txt" "$BASE/checksums.txt" || err "could not download checksums.txt"
 
 # Authenticate checksums.txt itself when cosign is available. Without this, an
-# attacker who can swap release assets could replace the archive AND its
-# checksums together and go undetected. cosign verify-blob (keyless) confirms
-# checksums.txt was signed by this repo's release workflow. If cosign isn't
-# installed we fall back to checksum-only integrity and say so — requiring
-# cosign would break the common install.
+# attacker who swaps release assets could replace the archive AND its checksums
+# together and go undetected. cosign verify-blob (keyless) confirms checksums.txt
+# was signed by this repo's release workflow at THIS tag.
+#
+# When cosign IS present we fail closed: the release pipeline always produces the
+# signature assets, so a missing/invalid signature means a tampered or malformed
+# release, not a benign older one. Only when cosign is absent do we fall back to
+# checksum-only integrity (requiring cosign would break the common install).
 if command -v cosign >/dev/null 2>&1; then
-  if $DL_O "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" 2>/dev/null \
-    && $DL_O "$TMP/checksums.txt.pem" "$BASE/checksums.txt.pem" 2>/dev/null; then
-    cosign verify-blob \
-      --certificate "$TMP/checksums.txt.pem" \
-      --signature "$TMP/checksums.txt.sig" \
-      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      --certificate-identity-regexp "^https://github.com/${REPO}/\.github/workflows/.+@refs/tags/" \
-      "$TMP/checksums.txt" >/dev/null 2>&1 \
-      || err "cosign signature verification failed for checksums.txt — refusing to install"
-  else
-    printf 'install: no signature assets for this release; using checksum-only verification\n' >&2
-  fi
+  $DL_O "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" 2>/dev/null \
+    || err "release is missing checksums.txt.sig — refusing to install (cosign is present, so a signature is expected)"
+  $DL_O "$TMP/checksums.txt.pem" "$BASE/checksums.txt.pem" 2>/dev/null \
+    || err "release is missing checksums.txt.pem — refusing to install"
+  # Pin the exact signer identity: this repo's release.yml at the tag being
+  # installed, not just any workflow/any tag.
+  identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${VERSION}"
+  cosign verify-blob \
+    --certificate "$TMP/checksums.txt.pem" \
+    --signature "$TMP/checksums.txt.sig" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    --certificate-identity "$identity" \
+    "$TMP/checksums.txt" >/dev/null 2>&1 \
+    || err "cosign signature verification failed for checksums.txt — refusing to install"
 else
   printf 'install: cosign not found; using checksum-only verification (install cosign to verify provenance)\n' >&2
 fi
