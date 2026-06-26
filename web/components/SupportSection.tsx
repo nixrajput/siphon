@@ -8,7 +8,7 @@ export function SupportSection() {
   const [primary, ...rest] = FUNDING;
 
   return (
-    <section className="mx-auto max-w-3xl px-6 py-20 text-center">
+    <section id="support" className="mx-auto max-w-3xl scroll-mt-24 px-6 py-20 text-center">
       <p className="eyebrow mb-4">support</p>
       <h2 className="mb-4 text-3xl">Free and open source</h2>
       <p className="mx-auto mb-8 max-w-md leading-relaxed text-(--muted)">

@@ -30,7 +30,24 @@ export function SiteFooter() {
 
         <div>
           <p className="eyebrow mb-3">Project</p>
+          {/* Mirrors the top-nav order: Features · Install · Support · Docs,
+              plus footer-appropriate repo links. */}
           <ul className="space-y-2 text-sm">
+            <li>
+              <Link href="/#features" className="text-(--muted) no-underline hover:text-(--paper)">
+                Features
+              </Link>
+            </li>
+            <li>
+              <Link href="/#install" className="text-(--muted) no-underline hover:text-(--paper)">
+                Install
+              </Link>
+            </li>
+            <li>
+              <Link href="/#support" className="text-(--muted) no-underline hover:text-(--paper)">
+                Support
+              </Link>
+            </li>
             <li>
               <Link href="/docs" className="text-(--muted) no-underline hover:text-(--paper)">
                 Documentation
@@ -48,11 +65,6 @@ export function SiteFooter() {
               >
                 Releases
               </ExtLink>
-            </li>
-            <li>
-              <Link href="/#install" className="text-(--muted) no-underline hover:text-(--paper)">
-                Install
-              </Link>
             </li>
           </ul>
         </div>

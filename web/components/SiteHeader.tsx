@@ -8,10 +8,13 @@ import { useRepoStats } from "@/components/useGitHub";
 import { ExtLink } from "@/components/ExtLink";
 
 // Nav items. `match` decides the active state: docs is active for any /docs/*
-// route; the others match their exact path (or hash target on home).
+// route; the in-page section links use root-relative hashes (/#id) so they work
+// from any route (Next navigates home, then scrolls). GitHub is external.
 const NAV: { label: string; href: string; match: (p: string) => boolean; external?: boolean }[] = [
-  { label: "Docs", href: "/docs", match: (p) => p.startsWith("/docs") },
+  { label: "Features", href: "/#features", match: () => false },
   { label: "Install", href: "/#install", match: () => false },
+  { label: "Support", href: "/#support", match: () => false },
+  { label: "Docs", href: "/docs", match: (p) => p.startsWith("/docs") },
   { label: "GitHub", href: REPO_URL, match: () => false, external: true },
 ];
 
@@ -32,7 +35,7 @@ export function SiteHeader() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-7 text-sm sm:flex">
+        <nav className="hidden items-center gap-6 text-sm md:flex">
           {NAV.map((item) =>
             item.external ? (
               <ExtLink
@@ -59,7 +62,7 @@ export function SiteHeader() {
         {/* Mobile toggle */}
         <button
           type="button"
-          className="sm:hidden"
+          className="md:hidden"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
@@ -80,7 +83,7 @@ export function SiteHeader() {
 
       {/* Mobile menu */}
       {open && (
-        <nav className="border-t border-(--line) px-6 py-4 sm:hidden">
+        <nav className="border-t border-(--line) px-6 py-4 md:hidden">
           <ul className="space-y-3 text-sm">
             {NAV.map((item) => (
               <li key={item.label}>

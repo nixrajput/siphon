@@ -148,7 +148,7 @@ export default function Home() {
 
       {/* Feature stream: the signature flow line runs down the left margin,
           connecting capabilities like data moving through a siphon. */}
-      <section className="mx-auto max-w-6xl px-6 py-12">
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12">
         <p className="eyebrow mb-10">what it does</p>
         <div className="flex gap-8">
           <div className="flowline hidden shrink-0 sm:block" aria-hidden />

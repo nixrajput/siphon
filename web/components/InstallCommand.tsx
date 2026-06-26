@@ -43,7 +43,12 @@ export function InstallCommand({ command }: { command: string }) {
       <span aria-hidden className="text-(--amber) select-none">
         $
       </span>
-      <code className="flex-1 overflow-x-auto whitespace-nowrap text-(--paper)">{command}</code>
+      {/* min-w-0 lets this flex item shrink below the command's intrinsic
+          width so the long URL scrolls inside the box instead of widening the
+          page (flex items default to min-width:auto). */}
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-(--paper)">
+        {command}
+      </code>
       <span
         className={`text-xs tracking-widest uppercase select-none ${
           copied ? "text-(--flow)" : "text-(--muted) group-hover:text-(--amber)"
