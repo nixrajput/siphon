@@ -1,17 +1,21 @@
 # siphon web — landing page & docs
 
 The marketing landing page and documentation site for siphon, built with
-Next.js (App Router) + Tailwind and deployed on Vercel. The docs pages render
-the repository's own `docs/*.md` at build time, so the site never drifts from
-the shipped documentation.
+Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 and deployed on
+Vercel. The docs pages render the repository's own `docs/*.md` at build time, so
+the site never drifts from the shipped documentation.
+
+Tailwind v4 is configured CSS-first: there is no `tailwind.config.*`. The design
+tokens live as CSS variables in `app/globals.css` (imported via
+`@import "tailwindcss"`), and the PostCSS plugin is `@tailwindcss/postcss`.
 
 ## Develop
 
 ```bash
 cd web
 npm install
-npm run dev           # http://localhost:3000
-npm run build         # production build (also what Vercel runs)
+npm run dev           # http://localhost:3000 (Turbopack)
+npm run build         # production build with Turbopack (also what Vercel runs)
 
 npm run lint          # ESLint
 npm run lint:fix      # ESLint, autofix

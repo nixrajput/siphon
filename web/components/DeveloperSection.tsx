@@ -56,7 +56,7 @@ export function DeveloperSection() {
               {STAT_LABELS.map((label) => (
                 <div key={label}>
                   <Skeleton className="h-7 w-14" />
-                  <div className="mt-1 text-xs uppercase tracking-widest text-[var(--muted)]">
+                  <div className="mt-1 text-xs tracking-widest text-[var(--muted)] uppercase">
                     {label}
                   </div>
                 </div>
@@ -67,10 +67,10 @@ export function DeveloperSection() {
               <div className="mt-8 flex gap-8">
                 {tiles.map((t) => (
                   <div key={t.label}>
-                    <div className="font-mono text-2xl font-bold tabular-nums text-[var(--paper)]">
+                    <div className="font-mono text-2xl font-bold text-[var(--paper)] tabular-nums">
                       {t.value.toLocaleString()}
                     </div>
-                    <div className="mt-1 text-xs uppercase tracking-widest text-[var(--muted)]">
+                    <div className="mt-1 text-xs tracking-widest text-[var(--muted)] uppercase">
                       {t.label}
                     </div>
                   </div>
@@ -85,7 +85,7 @@ export function DeveloperSection() {
             alone. */}
         {loading ? (
           <div>
-            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+            <p className="mb-3 font-mono text-xs tracking-widest text-[var(--muted)] uppercase">
               Top repositories
             </p>
             <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">
@@ -104,7 +104,7 @@ export function DeveloperSection() {
         ) : (
           topRepos.length > 0 && (
             <div>
-              <p className="mb-3 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+              <p className="mb-3 font-mono text-xs tracking-widest text-[var(--muted)] uppercase">
                 Top repositories
               </p>
               <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">

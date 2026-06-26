@@ -53,7 +53,7 @@ export default function DocsIndex() {
                 <Link
                   key={d.slug}
                   href={`/docs/${d.slug}`}
-                  className="bg-[var(--ink-2)]/40 group block rounded-xl border border-[var(--line)] p-5 no-underline transition-colors hover:border-[var(--flow)] hover:bg-[var(--ink-2)] hover:no-underline"
+                  className="group block rounded-xl border border-[var(--line)] bg-[var(--ink-2)]/40 p-5 no-underline transition-colors hover:border-[var(--flow)] hover:bg-[var(--ink-2)] hover:no-underline"
                 >
                   <span className="flex items-center gap-2 text-lg font-semibold text-[var(--paper)]">
                     {d.title}

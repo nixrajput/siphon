@@ -29,7 +29,12 @@ export function Reveal({
     // IntersectionObserver, leave the visible server render untouched.
     if (typeof IntersectionObserver === "undefined") return;
 
-    setArmed(true); // adds .reveal (hidden) now that JS can also reveal it
+    // Deliberate one-shot setState in effect: this is the progressive-enhancement
+    // pivot — the server renders visible (no .reveal), and only after mount, once
+    // JS + IntersectionObserver are confirmed, do we arm the hidden state. The
+    // single extra render is intended; refactoring it away risks the no-JS flash.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setArmed(true);
     const obs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {

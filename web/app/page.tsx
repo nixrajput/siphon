@@ -80,7 +80,7 @@ export default function Home() {
           <div>
             <p className="eyebrow rise mb-5">backup · restore · sync · cdc</p>
             <h1
-              className="rise text-balance text-[2.6rem] leading-[1.05] sm:text-6xl"
+              className="rise text-[2.6rem] leading-[1.05] text-balance sm:text-6xl"
               style={{ "--rise-delay": "80ms" } as React.CSSProperties}
             >
               Sync any database,
@@ -194,20 +194,20 @@ export default function Home() {
         <h2 className="mb-8 text-3xl">Up and running in one line</h2>
         <div className="space-y-6">
           <div>
-            <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+            <p className="mb-2 font-mono text-xs tracking-widest text-[var(--muted)] uppercase">
               Linux · macOS
             </p>
             <InstallCommand command={INSTALL_CMD} />
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+              <p className="mb-2 font-mono text-xs tracking-widest text-[var(--muted)] uppercase">
                 Homebrew
               </p>
               <InstallCommand command="brew install nixrajput/siphon/siphon" />
             </div>
             <div>
-              <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+              <p className="mb-2 font-mono text-xs tracking-widest text-[var(--muted)] uppercase">
                 Scoop (Windows)
               </p>
               <InstallCommand command="scoop install siphon" />

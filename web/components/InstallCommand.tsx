@@ -40,14 +40,14 @@ export function InstallCommand({ command }: { command: string }) {
       className="group flex w-full items-center gap-3 rounded-lg border border-[var(--line)] bg-[var(--ink-2)] px-4 py-3 text-left font-mono text-sm transition-colors hover:border-[var(--amber)]"
       aria-label={`Copy install command: ${command}`}
     >
-      <span aria-hidden className="select-none text-[var(--amber)]">
+      <span aria-hidden className="text-[var(--amber)] select-none">
         $
       </span>
       <code className="flex-1 overflow-x-auto whitespace-nowrap text-[var(--paper)]">
         {command}
       </code>
       <span
-        className={`select-none text-xs uppercase tracking-widest ${
+        className={`text-xs tracking-widest uppercase select-none ${
           copied ? "text-[var(--flow)]" : "text-[var(--muted)] group-hover:text-[var(--amber)]"
         }`}
       >
