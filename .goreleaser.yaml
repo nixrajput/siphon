@@ -9,9 +9,9 @@ version: 2
 
 project_name: siphon
 
-before:
-  hooks:
-    - go mod tidy
+# No `go mod tidy` before-hook: the release path stays read-only so the
+# published binary is built from exactly the committed dependency graph at the
+# tagged revision (CI enforces tidiness separately).
 
 builds:
   - id: siphon

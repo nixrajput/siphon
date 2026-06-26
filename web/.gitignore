@@ -2,4 +2,5 @@
 /.next
 /out
 *.tsbuildinfo
-next-env.d.ts
+# next-env.d.ts is committed (tsconfig.json includes it; a fresh checkout needs
+# it before the first `next build` regenerates it).

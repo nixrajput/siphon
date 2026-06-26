@@ -107,7 +107,11 @@
   animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   animation-delay: var(--rise-delay, 0s);
 }
-/* Scroll reveal: hidden until JS adds .is-in (IntersectionObserver). */
+/* Scroll reveal. SAFETY: the .reveal class is applied ONLY by the Reveal
+   component's effect, and only once it has confirmed JS + IntersectionObserver +
+   no reduced-motion (see Reveal.tsx). So this hidden base state never reaches a
+   no-JS render — SSR emits no .reveal class, leaving content visible. The
+   observer then adds .is-in to animate it in. */
 .reveal {
   opacity: 0;
   transform: translateY(16px);

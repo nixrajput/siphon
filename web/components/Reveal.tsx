@@ -25,6 +25,9 @@ export function Reveal({
 
     // Respect reduced motion: stay plainly visible, never animate.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Only arm the hidden state if we can actually reveal it again — without
+    // IntersectionObserver, leave the visible server render untouched.
+    if (typeof IntersectionObserver === "undefined") return;
 
     setArmed(true); // adds .reveal (hidden) now that JS can also reveal it
     const obs = new IntersectionObserver(

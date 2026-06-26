@@ -105,7 +105,7 @@ export default function Home() {
       </section>
 
       {/* Install: the one amber moment. Three ways, the curl|sh widget leads. */}
-      <section id="install" className="mx-auto max-w-3xl px-6 py-20">
+      <section id="install" className="mx-auto max-w-3xl scroll-mt-24 px-6 py-20">
         <p className="eyebrow mb-4">install</p>
         <h2 className="mb-8 text-3xl">Up and running in one line</h2>
         <div className="space-y-6">

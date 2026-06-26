@@ -77,13 +77,15 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Install
 
+> The install script, Homebrew tap, and Scoop bucket below go live with the first `v1.0.0` release. Until then, [build from source](#from-source).
+
 **Linux / macOS** — the install script downloads the right release binary and verifies its SHA-256 before installing:
 
 ```bash
-curl -fsSL https://siphon.dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/nixrajput/siphon/main/scripts/install.sh | sh
 ```
 
-Override the target with `SIPHON_INSTALL_DIR=…` or pin a version with `SIPHON_VERSION=v1.0.0`.
+Override the target with `SIPHON_INSTALL_DIR=…` or pin a version with `SIPHON_VERSION=v1.0.0`. (Once the site is live, `https://siphon.dev/install.sh` redirects here.)
 
 **Homebrew:**
 
@@ -98,7 +100,18 @@ scoop bucket add siphon https://github.com/nixrajput/scoop-siphon
 scoop install siphon
 ```
 
-**Prebuilt binaries** for every OS/arch are attached to each [release](https://github.com/nixrajput/siphon/releases), with a `checksums.txt` and a cosign signature (`checksums.txt.sig` + `.pem`) — verify with `cosign verify-blob`.
+**Prebuilt binaries** for every OS/arch are attached to each [release](https://github.com/nixrajput/siphon/releases), with a `checksums.txt` and a cosign keyless signature. Verify provenance — pin the issuer **and** the signer identity, or a forged Fulcio cert would still pass:
+
+```bash
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --certificate-identity "https://github.com/nixrajput/siphon/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  checksums.txt
+```
+
+Substitute the tag you downloaded for `v1.0.0`. Then check a binary's archive against the verified `checksums.txt`.
 
 **From source:**
 

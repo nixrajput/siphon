@@ -28,22 +28,26 @@ export function Terminal() {
         <span className="ml-3 font-mono text-xs text-[var(--muted)]">siphon — zsh</span>
       </div>
       <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.82rem] leading-relaxed">
-        {SESSION.map((line, i) => (
-          <div key={i}>
-            {line.kind === "cmd" && (
-              <span>
-                <span className="text-[var(--amber)]">$ </span>
-                <span className="text-[var(--paper)]">{line.text}</span>
-              </span>
-            )}
-            {line.kind === "out" && (
-              <span className="text-[var(--muted)]">{line.text}</span>
-            )}
-            {line.kind === "flow" && (
-              <span className="text-[var(--flow)]">{line.text}</span>
-            )}
-          </div>
-        ))}
+        <code>
+          {/* Block <span>s, not <div>s: a <pre> auto-closes before a block-level
+              child, which would desync SSR markup from React's tree on hydrate. */}
+          {SESSION.map((line, i) => (
+            <span key={i} className="block">
+              {line.kind === "cmd" && (
+                <span>
+                  <span className="text-[var(--amber)]">$ </span>
+                  <span className="text-[var(--paper)]">{line.text}</span>
+                </span>
+              )}
+              {line.kind === "out" && (
+                <span className="text-[var(--muted)]">{line.text}</span>
+              )}
+              {line.kind === "flow" && (
+                <span className="text-[var(--flow)]">{line.text}</span>
+              )}
+            </span>
+          ))}
+        </code>
       </pre>
     </div>
   );

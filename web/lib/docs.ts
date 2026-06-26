@@ -28,6 +28,21 @@ export function docNav(): DocMeta[] {
   return NAV.map(({ slug, title }) => ({ slug, title }));
 }
 
+// resolveDocHref maps an in-repo Markdown link to its site route. The docs
+// cross-link each other by filename (e.g. "CONFIGURATION.md", "OPS.md#secret-
+// backends", "docs/STORAGE.md"); react-markdown would render those verbatim as
+// broken /docs/CONFIGURATION.md URLs. This rewrites a known doc file to
+// /docs/<slug> (preserving any #hash), and returns null for anything else (http
+// links, in-page anchors) so the caller leaves them untouched.
+export function resolveDocHref(href: string): string | null {
+  if (!href || /^[a-z]+:|^#|^\//i.test(href)) return null; // external, anchor, or absolute
+  const [pathPart, hash] = href.split("#");
+  const base = pathPart.replace(/^\.?\/?(docs\/)?/, "").toUpperCase();
+  const entry = NAV.find((n) => n.file.toUpperCase() === base);
+  if (!entry) return null;
+  return `/docs/${entry.slug}${hash ? `#${hash}` : ""}`;
+}
+
 export function getDoc(slug: string): Doc | null {
   const entry = NAV.find((n) => n.slug === slug);
   if (!entry) return null;

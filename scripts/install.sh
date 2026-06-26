@@ -77,6 +77,29 @@ printf 'install: downloading %s (%s)\n' "$ARCHIVE" "$VERSION" >&2
 $DL_O "$TMP/$ARCHIVE" "$BASE/$ARCHIVE" || err "download failed: $BASE/$ARCHIVE"
 $DL_O "$TMP/checksums.txt" "$BASE/checksums.txt" || err "could not download checksums.txt"
 
+# Authenticate checksums.txt itself when cosign is available. Without this, an
+# attacker who can swap release assets could replace the archive AND its
+# checksums together and go undetected. cosign verify-blob (keyless) confirms
+# checksums.txt was signed by this repo's release workflow. If cosign isn't
+# installed we fall back to checksum-only integrity and say so — requiring
+# cosign would break the common install.
+if command -v cosign >/dev/null 2>&1; then
+  if $DL_O "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" 2>/dev/null \
+    && $DL_O "$TMP/checksums.txt.pem" "$BASE/checksums.txt.pem" 2>/dev/null; then
+    cosign verify-blob \
+      --certificate "$TMP/checksums.txt.pem" \
+      --signature "$TMP/checksums.txt.sig" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      --certificate-identity-regexp "^https://github.com/${REPO}/\.github/workflows/.+@refs/tags/" \
+      "$TMP/checksums.txt" >/dev/null 2>&1 \
+      || err "cosign signature verification failed for checksums.txt — refusing to install"
+  else
+    printf 'install: no signature assets for this release; using checksum-only verification\n' >&2
+  fi
+else
+  printf 'install: cosign not found; using checksum-only verification (install cosign to verify provenance)\n' >&2
+fi
+
 # Verify the archive's SHA-256 against the line for it in checksums.txt.
 expected=$(grep " ${ARCHIVE}\$" "$TMP/checksums.txt" | awk '{print $1}')
 [ -n "$expected" ] || err "no checksum entry for $ARCHIVE"
