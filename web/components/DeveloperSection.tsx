@@ -31,19 +31,19 @@ export function DeveloperSection() {
             Made by{" "}
             <ExtLink
               href={DEVELOPER.portfolio}
-              className="bg-gradient-to-r from-[var(--flow)] to-[var(--flow-2)] bg-clip-text text-transparent hover:no-underline"
+              className="bg-linear-to-r from-(--flow) to-(--flow-2) bg-clip-text text-transparent hover:no-underline"
             >
               {DEVELOPER.name}
             </ExtLink>
           </h2>
-          <p className="mt-4 max-w-md leading-relaxed text-[var(--muted)]">
+          <p className="mt-4 max-w-md leading-relaxed text-(--muted)">
             Open-source engineer working across databases, CLIs, and developer tooling. siphon is
             one of several projects — the rest live on GitHub.
           </p>
           <div className="mt-6">
             <ExtLink
               href={DEVELOPER.github}
-              className="inline-flex rounded-lg border border-[var(--line)] px-4 py-2 text-sm text-[var(--paper)] no-underline transition-colors hover:border-[var(--flow)] hover:no-underline"
+              className="inline-flex rounded-lg border border-(--line) px-4 py-2 text-sm text-(--paper) no-underline transition-colors hover:border-(--flow) hover:no-underline"
             >
               View @{DEVELOPER.handle} on GitHub ↗
             </ExtLink>
@@ -56,7 +56,7 @@ export function DeveloperSection() {
               {STAT_LABELS.map((label) => (
                 <div key={label}>
                   <Skeleton className="h-7 w-14" />
-                  <div className="mt-1 text-xs uppercase tracking-widest text-[var(--muted)]">
+                  <div className="mt-1 text-xs tracking-widest text-(--muted) uppercase">
                     {label}
                   </div>
                 </div>
@@ -67,10 +67,10 @@ export function DeveloperSection() {
               <div className="mt-8 flex gap-8">
                 {tiles.map((t) => (
                   <div key={t.label}>
-                    <div className="font-mono text-2xl font-bold tabular-nums text-[var(--paper)]">
+                    <div className="font-mono text-2xl font-bold text-(--paper) tabular-nums">
                       {t.value.toLocaleString()}
                     </div>
-                    <div className="mt-1 text-xs uppercase tracking-widest text-[var(--muted)]">
+                    <div className="mt-1 text-xs tracking-widest text-(--muted) uppercase">
                       {t.label}
                     </div>
                   </div>
@@ -85,12 +85,12 @@ export function DeveloperSection() {
             alone. */}
         {loading ? (
           <div>
-            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+            <p className="mb-3 font-mono text-xs tracking-widest text-(--muted) uppercase">
               Top repositories
             </p>
-            <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">
+            <div className="grid gap-px overflow-hidden rounded-xl border border-(--line) bg-(--line) sm:grid-cols-2">
               {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="bg-[var(--ink)] p-4">
+                <div key={i} className="bg-(--ink) p-4">
                   <div className="flex items-center justify-between gap-2">
                     <Skeleton className="h-4 w-32" />
                     <Skeleton className="h-3 w-8" />
@@ -104,26 +104,26 @@ export function DeveloperSection() {
         ) : (
           topRepos.length > 0 && (
             <div>
-              <p className="mb-3 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+              <p className="mb-3 font-mono text-xs tracking-widest text-(--muted) uppercase">
                 Top repositories
               </p>
-              <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">
+              <div className="grid gap-px overflow-hidden rounded-xl border border-(--line) bg-(--line) sm:grid-cols-2">
                 {topRepos.map((r) => (
                   <ExtLink
                     key={r.name}
                     href={r.url}
-                    className="block bg-[var(--ink)] p-4 no-underline transition-colors hover:bg-[var(--ink-2)] hover:no-underline"
+                    className="block bg-(--ink) p-4 no-underline transition-colors hover:bg-(--ink-2) hover:no-underline"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-sm font-semibold text-[var(--paper)]">
+                      <span className="truncate font-mono text-sm font-semibold text-(--paper)">
                         {GH_OWNER}/{r.name}
                       </span>
-                      <span className="shrink-0 font-mono text-xs text-[var(--amber)]">
+                      <span className="shrink-0 font-mono text-xs text-(--amber)">
                         ★ {r.stars.toLocaleString()}
                       </span>
                     </div>
                     {r.description && (
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[var(--muted)]">
+                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-(--muted)">
                         {r.description}
                       </p>
                     )}

@@ -80,12 +80,12 @@ export default function Home() {
           <div>
             <p className="eyebrow rise mb-5">backup · restore · sync · cdc</p>
             <h1
-              className="rise text-balance text-[2.6rem] leading-[1.05] sm:text-6xl"
+              className="rise text-[2.6rem] leading-[1.05] text-balance sm:text-6xl"
               style={{ "--rise-delay": "80ms" } as React.CSSProperties}
             >
               Sync any database,
               <br />
-              <span className="bg-gradient-to-r from-[var(--flow)] to-[var(--flow-2)] bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-(--flow) to-(--flow-2) bg-clip-text text-transparent">
                 anywhere.
               </span>
             </h1>
@@ -94,8 +94,8 @@ export default function Home() {
               style={{ "--rise-delay": "160ms" } as React.CSSProperties}
             >
               One binary that turns the painful sprawl of{" "}
-              <code className="mono text-sm text-[var(--flow)]">pg_dump → pg_restore</code> shell
-              scripts into a guided, observable workflow — across PostgreSQL, MySQL, and MariaDB.
+              <code className="mono text-sm text-(--flow)">pg_dump → pg_restore</code> shell scripts
+              into a guided, observable workflow — across PostgreSQL, MySQL, and MariaDB.
             </p>
             <div className="rise mt-8" style={{ "--rise-delay": "240ms" } as React.CSSProperties}>
               <HeroInstall />
@@ -106,13 +106,13 @@ export default function Home() {
             >
               <Link
                 href="/docs"
-                className="rounded-lg bg-[var(--flow)] px-5 py-3 font-medium text-[var(--ink)] no-underline transition-opacity hover:no-underline hover:opacity-90"
+                className="rounded-lg bg-(--flow) px-5 py-3 font-medium text-(--ink) no-underline transition-opacity hover:no-underline hover:opacity-90"
               >
                 Read the docs
               </Link>
               <ExtLink
                 href={REPO_URL}
-                className="rounded-lg border border-[var(--line)] px-5 py-3 font-medium text-[var(--paper)] no-underline transition-colors hover:border-[var(--flow)] hover:no-underline"
+                className="rounded-lg border border-(--line) px-5 py-3 font-medium text-(--paper) no-underline transition-colors hover:border-(--flow) hover:no-underline"
               >
                 View source ↗
               </ExtLink>
@@ -128,15 +128,15 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 py-12">
         <p className="eyebrow mb-3">how it flows</p>
         <h2 className="mb-10 max-w-2xl text-3xl">Three verbs, one conduit</h2>
-        <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] md:grid-cols-3">
+        <div className="grid gap-px overflow-hidden rounded-xl border border-(--line) bg-(--line) md:grid-cols-3">
           {FLOW.map((s, i) => (
-            <Reveal key={s.n} delay={i * 90} className="bg-[var(--ink)]">
+            <Reveal key={s.n} delay={i * 90} className="bg-(--ink)">
               <article className="flex h-full flex-col p-6">
-                <span className="mono text-3xl font-bold text-[var(--flow)]">{s.n}</span>
+                <span className="mono text-3xl font-bold text-(--flow)">{s.n}</span>
                 <h3 className="mt-4 text-xl">{s.title}</h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-[var(--muted)]">{s.body}</p>
-                <code className="mt-4 block rounded-md border border-[var(--line)] bg-[#0a111e] px-3 py-2 font-mono text-xs text-[var(--paper)]">
-                  <span className="text-[var(--amber)]">$ </span>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-(--muted)">{s.body}</p>
+                <code className="mt-4 block rounded-md border border-(--line) bg-[#0a111e] px-3 py-2 font-mono text-xs text-(--paper)">
+                  <span className="text-(--amber)">$ </span>
                   {s.cmd}
                 </code>
               </article>
@@ -151,13 +151,13 @@ export default function Home() {
         <p className="eyebrow mb-10">what it does</p>
         <div className="flex gap-8">
           <div className="flowline hidden shrink-0 sm:block" aria-hidden />
-          <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">
+          <div className="grid gap-px overflow-hidden rounded-xl border border-(--line) bg-(--line) sm:grid-cols-2">
             {FEATURES.map((f, i) => (
-              <Reveal key={f.label} delay={(i % 2) * 90} className="bg-[var(--ink)]">
+              <Reveal key={f.label} delay={(i % 2) * 90} className="bg-(--ink)">
                 <article className="p-6">
                   <p className="eyebrow mb-3">{f.label}</p>
                   <h3 className="mb-2 text-xl">{f.title}</h3>
-                  <p className="text-sm leading-relaxed text-[var(--muted)]">{f.body}</p>
+                  <p className="text-sm leading-relaxed text-(--muted)">{f.body}</p>
                 </article>
               </Reveal>
             ))}
@@ -167,10 +167,10 @@ export default function Home() {
 
       {/* Engines strip: the three databases siphon speaks, stated once. */}
       <section className="mx-auto max-w-6xl px-6 py-12">
-        <div className="flex flex-col items-start justify-between gap-6 rounded-xl border border-[var(--line)] bg-[var(--ink-2)] p-8 sm:flex-row sm:items-center">
+        <div className="flex flex-col items-start justify-between gap-6 rounded-xl border border-(--line) bg-(--ink-2) p-8 sm:flex-row sm:items-center">
           <div>
             <p className="eyebrow mb-2">speaks natively</p>
-            <p className="max-w-md text-sm leading-relaxed text-[var(--muted)]">
+            <p className="max-w-md text-sm leading-relaxed text-(--muted)">
               First-class drivers for each engine — same commands, engine-aware quoting, types, and
               change capture under the hood.
             </p>
@@ -179,7 +179,7 @@ export default function Home() {
             {ENGINES.map((e) => (
               <span
                 key={e}
-                className="rounded-full border border-[var(--line)] bg-[var(--ink)] px-4 py-2 font-mono text-sm text-[var(--flow)]"
+                className="rounded-full border border-(--line) bg-(--ink) px-4 py-2 font-mono text-sm text-(--flow)"
               >
                 {e}
               </span>
@@ -194,29 +194,29 @@ export default function Home() {
         <h2 className="mb-8 text-3xl">Up and running in one line</h2>
         <div className="space-y-6">
           <div>
-            <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+            <p className="mb-2 font-mono text-xs tracking-widest text-(--muted) uppercase">
               Linux · macOS
             </p>
             <InstallCommand command={INSTALL_CMD} />
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+              <p className="mb-2 font-mono text-xs tracking-widest text-(--muted) uppercase">
                 Homebrew
               </p>
               <InstallCommand command="brew install nixrajput/siphon/siphon" />
             </div>
             <div>
-              <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
+              <p className="mb-2 font-mono text-xs tracking-widest text-(--muted) uppercase">
                 Scoop (Windows)
               </p>
               <InstallCommand command="scoop install siphon" />
             </div>
           </div>
-          <p className="text-sm text-[var(--muted)]">
-            Prefer source? <code className="mono text-[var(--flow)]">go install</code> the module,
-            or grab a prebuilt binary from <ExtLink href={`${REPO_URL}/releases`}>Releases</ExtLink>
-            . Every archive has a SHA-256 checksum, and the checksum file is cosign-signed.
+          <p className="text-sm text-(--muted)">
+            Prefer source? <code className="mono text-(--flow)">go install</code> the module, or
+            grab a prebuilt binary from <ExtLink href={`${REPO_URL}/releases`}>Releases</ExtLink>.
+            Every archive has a SHA-256 checksum, and the checksum file is cosign-signed.
           </p>
         </div>
       </section>

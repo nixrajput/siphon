@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import {
   SITE_URL,
@@ -100,6 +101,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           // Structured data is static, build-time JSON — safe to inline.
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
+        {/* Vercel Web Analytics — privacy-friendly (no cookies). A no-op unless
+            deployed on Vercel with Analytics enabled, so it won't affect the
+            static build or non-Vercel hosting. */}
+        <Analytics />
       </body>
     </html>
   );

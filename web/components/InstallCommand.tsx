@@ -37,18 +37,16 @@ export function InstallCommand({ command }: { command: string }) {
     <button
       type="button"
       onClick={copy}
-      className="group flex w-full items-center gap-3 rounded-lg border border-[var(--line)] bg-[var(--ink-2)] px-4 py-3 text-left font-mono text-sm transition-colors hover:border-[var(--amber)]"
+      className="group flex w-full items-center gap-3 rounded-lg border border-(--line) bg-(--ink-2) px-4 py-3 text-left font-mono text-sm transition-colors hover:border-(--amber)"
       aria-label={`Copy install command: ${command}`}
     >
-      <span aria-hidden className="select-none text-[var(--amber)]">
+      <span aria-hidden className="text-(--amber) select-none">
         $
       </span>
-      <code className="flex-1 overflow-x-auto whitespace-nowrap text-[var(--paper)]">
-        {command}
-      </code>
+      <code className="flex-1 overflow-x-auto whitespace-nowrap text-(--paper)">{command}</code>
       <span
-        className={`select-none text-xs uppercase tracking-widest ${
-          copied ? "text-[var(--flow)]" : "text-[var(--muted)] group-hover:text-[var(--amber)]"
+        className={`text-xs tracking-widest uppercase select-none ${
+          copied ? "text-(--flow)" : "text-(--muted) group-hover:text-(--amber)"
         }`}
       >
         {copied ? "Copied" : "Copy"}
