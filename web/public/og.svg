@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38e0c8"/>
+      <stop offset="1" stop-color="#4aa8ff"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38e0c8" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#38e0c8"/>
+      <stop offset="1" stop-color="#4aa8ff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0e1726"/>
+  <!-- faint conduit grid -->
+  <g stroke="#25324d" stroke-width="1" opacity="0.5">
+    <line x1="0" y1="158" x2="1200" y2="158"/>
+    <line x1="0" y1="472" x2="1200" y2="472"/>
+  </g>
+  <!-- signature flow line -->
+  <rect x="110" y="150" width="3" height="330" fill="url(#line)"/>
+  <text x="150" y="250" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="40" fill="#38e0c8">~/</text>
+  <text x="208" y="250" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="40" fill="#e8eef6" font-weight="700">siphon</text>
+  <text x="148" y="360" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="78" font-weight="800" letter-spacing="-2">
+    <tspan fill="#e8eef6">Sync any database, </tspan><tspan fill="url(#flow)">anywhere.</tspan>
+  </text>
+  <text x="150" y="430" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="30" fill="#7e8ca3">
+    Backup · restore · sync · incremental · cross-engine · CDC
+  </text>
+  <text x="150" y="490" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24" fill="#f6b73c">
+    PostgreSQL · MySQL · MariaDB
+  </text>
+</svg>

@@ -10,13 +10,31 @@ the shipped documentation.
 ```bash
 cd web
 npm install
-npm run dev      # http://localhost:3000
-npm run build    # production build (also what Vercel runs)
-npm run lint
+npm run dev           # http://localhost:3000
+npm run build         # production build (also what Vercel runs)
+
+npm run lint          # ESLint
+npm run lint:fix      # ESLint, autofix
+npm run format        # Prettier, write
+npm run format:check  # Prettier, check only (used by the pre-push hook)
 ```
 
 The docs pipeline (`lib/docs.ts`) reads `../docs/*.md` relative to `web/`, so
 run commands from inside `web/` with the repo checked out around it.
+
+## Pre-push hook (lint + format gate)
+
+A committed git hook (`.githooks/pre-push`) runs `npm run lint` and
+`npm run format:check` before any push that touches `web/`, and **aborts the
+push if either fails**. Pushes that don't change `web/` skip the check (so
+Go-only pushes stay fast). Enable it once per clone — from the repo root:
+
+```bash
+make hooks            # = git config core.hooksPath .githooks
+```
+
+Bypass in an emergency with `git push --no-verify`. The repo root also exposes
+`make web-lint` and `make web-format` as shortcuts into this app.
 
 ## Deploy (Vercel) — owner setup
 
@@ -27,12 +45,24 @@ needed). One-time setup on the Vercel account:
 2. Set **Root Directory** = `web`.
 3. Framework preset: **Next.js** (auto-detected). Build command `next build`,
    output handled by Vercel.
-4. (Optional) Point the `siphon.dev` domain at the project; the install command
-   on the landing page references `https://siphon.dev/install.sh`, so either map
-   that path to the repo's `scripts/install.sh` (e.g. a redirect/rewrite) or
-   update the command to the raw GitHub URL.
+4. **Custom domain** — add `siphon.nixrajput.com` to the project and point a
+   CNAME at Vercel. The site's canonical URL, sitemap, robots, and Open Graph
+   tags are already set to this domain (`lib/site.ts` → `SITE_URL`). The install
+   command uses the raw GitHub URL, so no path rewrite is needed.
 
 Pushes to `main` then deploy production; PRs get preview deployments.
+
+## SEO / indexing
+
+- Canonical URL, Open Graph + Twitter cards, and JSON-LD (`SoftwareApplication`
+  - `Person`) are emitted from `app/layout.tsx`, keyed off `SITE_URL`.
+- `app/sitemap.ts` and `app/robots.ts` generate `/sitemap.xml` + `/robots.txt`
+  at build time; the sitemap is derived from the same `docNav()` source the
+  pages render from, so it never drifts.
+- `public/og.svg` is the share image. **Note:** several social crawlers don't
+  rasterize SVG OG images — swap in a 1200×630 PNG (or an `opengraph-image.tsx`
+  route) before launch if rich social unfurls matter.
+- After deploy, submit the sitemap in Google Search Console for the domain.
 
 ## Phase H release provisioning checklist (owner)
 

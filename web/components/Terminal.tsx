@@ -30,23 +30,28 @@ export function Terminal() {
       <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.82rem] leading-relaxed">
         <code>
           {/* Block <span>s, not <div>s: a <pre> auto-closes before a block-level
-              child, which would desync SSR markup from React's tree on hydrate. */}
+              child, which would desync SSR markup from React's tree on hydrate.
+              Each line carries --i so the CSS .term-line stagger plays them in
+              sequence, reading like a live transcript. */}
           {SESSION.map((line, i) => (
-            <span key={i} className="block">
+            <span key={i} className="term-line block" style={{ "--i": i } as React.CSSProperties}>
               {line.kind === "cmd" && (
                 <span>
                   <span className="text-[var(--amber)]">$ </span>
                   <span className="text-[var(--paper)]">{line.text}</span>
                 </span>
               )}
-              {line.kind === "out" && (
-                <span className="text-[var(--muted)]">{line.text}</span>
-              )}
-              {line.kind === "flow" && (
-                <span className="text-[var(--flow)]">{line.text}</span>
-              )}
+              {line.kind === "out" && <span className="text-[var(--muted)]">{line.text}</span>}
+              {line.kind === "flow" && <span className="text-[var(--flow)]">{line.text}</span>}
             </span>
           ))}
+          <span
+            className="term-line block"
+            style={{ "--i": SESSION.length } as React.CSSProperties}
+          >
+            <span className="text-[var(--amber)]">$ </span>
+            <span className="caret text-[var(--paper)]">▋</span>
+          </span>
         </code>
       </pre>
     </div>

@@ -7,21 +7,13 @@ export function generateStaticParams() {
   return docNav().map((d) => ({ slug: d.slug }));
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const doc = getDoc(slug);
   return { title: doc ? `${doc.title} — siphon` : "siphon docs" };
 }
 
-export default async function DocPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function DocPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const doc = getDoc(slug);
   if (!doc) notFound();

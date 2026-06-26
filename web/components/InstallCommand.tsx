@@ -10,9 +10,12 @@ export function InstallCommand({ command }: { command: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear a pending reset on unmount so it can't fire on a gone component.
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   async function copy() {
     try {
@@ -37,7 +40,9 @@ export function InstallCommand({ command }: { command: string }) {
       className="group flex w-full items-center gap-3 rounded-lg border border-[var(--line)] bg-[var(--ink-2)] px-4 py-3 text-left font-mono text-sm transition-colors hover:border-[var(--amber)]"
       aria-label={`Copy install command: ${command}`}
     >
-      <span aria-hidden className="select-none text-[var(--amber)]">$</span>
+      <span aria-hidden className="select-none text-[var(--amber)]">
+        $
+      </span>
       <code className="flex-1 overflow-x-auto whitespace-nowrap text-[var(--paper)]">
         {command}
       </code>

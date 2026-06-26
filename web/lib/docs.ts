@@ -8,25 +8,88 @@ import matter from "gray-matter";
 // below, so the site can't silently drift from the code repo's docs.
 const DOCS_DIR = path.join(process.cwd(), "..", "docs");
 
-// Ordered nav: file → slug + display title. Order is the sidebar order.
-const NAV: { file: string; slug: string; title: string }[] = [
-  { file: "GETTING_STARTED.md", slug: "getting-started", title: "Getting started" },
-  { file: "CONFIGURATION.md", slug: "configuration", title: "Configuration" },
-  { file: "DRIVERS.md", slug: "drivers", title: "Drivers" },
-  { file: "INCREMENTAL.md", slug: "incremental", title: "Incremental backup" },
-  { file: "CROSS_ENGINE.md", slug: "cross-engine", title: "Cross-engine sync" },
-  { file: "CDC.md", slug: "cdc", title: "CDC (continuous sync)" },
-  { file: "STORAGE.md", slug: "storage", title: "Storage backends" },
-  { file: "RETENTION.md", slug: "retention", title: "Retention & pruning" },
-  { file: "OPS.md", slug: "ops", title: "Operational features" },
+// A doc's group, used by the Overview page to cluster guides. Sidebar order is
+// still the array order below.
+export type DocGroup = "Start here" | "Moving data" | "Operating";
+
+// Ordered nav: file → slug + display title + a one-line blurb (for the Overview
+// cards) + its group. The blurb is site copy, not pulled from the Markdown, so
+// the Overview reads as a curated index rather than a dump of first lines.
+const NAV: { file: string; slug: string; title: string; blurb: string; group: DocGroup }[] = [
+  {
+    file: "GETTING_STARTED.md",
+    slug: "getting-started",
+    title: "Getting started",
+    blurb: "Install siphon and run your first backup, restore, and sync in a few minutes.",
+    group: "Start here",
+  },
+  {
+    file: "CONFIGURATION.md",
+    slug: "configuration",
+    title: "Configuration",
+    blurb: "Connection profiles, config file layout, env vars, and per-profile overrides.",
+    group: "Start here",
+  },
+  {
+    file: "DRIVERS.md",
+    slug: "drivers",
+    title: "Drivers",
+    blurb: "How siphon talks to PostgreSQL, MySQL, and MariaDB, and what each driver supports.",
+    group: "Start here",
+  },
+  {
+    file: "INCREMENTAL.md",
+    slug: "incremental",
+    title: "Incremental backup",
+    blurb: "Capture only what changed since a base, then replay the base→incremental chain.",
+    group: "Moving data",
+  },
+  {
+    file: "CROSS_ENGINE.md",
+    slug: "cross-engine",
+    title: "Cross-engine sync",
+    blurb: "Move schema and data between different engines through a canonical model.",
+    group: "Moving data",
+  },
+  {
+    file: "CDC.md",
+    slug: "cdc",
+    title: "CDC (continuous sync)",
+    blurb: "Tail the source's change stream and apply it to a target, with resumable state.",
+    group: "Moving data",
+  },
+  {
+    file: "STORAGE.md",
+    slug: "storage",
+    title: "Storage backends",
+    blurb: "Keep dumps locally or in S3 with a key-addressed, pluggable storage seam.",
+    group: "Operating",
+  },
+  {
+    file: "RETENTION.md",
+    slug: "retention",
+    title: "Retention & pruning",
+    blurb: "Prune whole backup chains by keep-last, max-age, or GFS without orphaning.",
+    group: "Operating",
+  },
+  {
+    file: "OPS.md",
+    slug: "ops",
+    title: "Operational features",
+    blurb: "Audit logging, 2FA-gated destructive ops, telemetry, schedules, and tunnels.",
+    group: "Operating",
+  },
 ];
 
-export type DocMeta = { slug: string; title: string };
-export type Doc = DocMeta & { content: string };
+export type DocMeta = { slug: string; title: string; blurb: string; group: DocGroup };
+export type Doc = { slug: string; title: string; content: string };
 
 export function docNav(): DocMeta[] {
-  return NAV.map(({ slug, title }) => ({ slug, title }));
+  return NAV.map(({ slug, title, blurb, group }) => ({ slug, title, blurb, group }));
 }
+
+// The group order the Overview renders sections in.
+export const DOC_GROUPS: DocGroup[] = ["Start here", "Moving data", "Operating"];
 
 // resolveDocHref maps an in-repo Markdown link to its site route. The docs
 // cross-link each other by filename (e.g. "CONFIGURATION.md", "OPS.md#secret-

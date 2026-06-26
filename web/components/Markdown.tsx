@@ -6,11 +6,18 @@ import { resolveDocHref } from "@/lib/docs";
 
 // Rewrite in-repo .md links to their /docs/<slug> routes so the docs'
 // cross-references resolve on the site instead of 404-ing as /docs/FILE.md.
-// Non-doc links (http, in-page anchors) pass through unchanged.
+// In-page anchors pass through unchanged; absolute http(s) links are external
+// and open in a new tab with a safe rel.
 const components: Components = {
   a({ href = "", children, ...props }) {
+    const internal = resolveDocHref(href);
+    const isExternal = /^https?:\/\//i.test(href);
     return (
-      <a href={resolveDocHref(href) ?? href} {...props}>
+      <a
+        href={internal ?? href}
+        {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        {...props}
+      >
         {children}
       </a>
     );
