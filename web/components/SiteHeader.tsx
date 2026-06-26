@@ -114,8 +114,9 @@ export function SiteHeader() {
   );
 }
 
-// Live release badge with a pulsing status dot. Reads "shipping" until a real
-// release tag is published, then shows the tag — never a broken/empty state.
+// Live release badge with a pulsing status dot. Shows neutral "unreleased" copy
+// until a real release tag is published (rather than claiming a version that
+// doesn't exist yet), then shows the actual tag — never a broken/empty state.
 function VersionBadge({ version }: { version: string | null }) {
   return (
     <ExtLink
@@ -123,7 +124,7 @@ function VersionBadge({ version }: { version: string | null }) {
       className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--ink-2)] px-3 py-1 font-mono text-xs text-[var(--muted)] no-underline transition-colors hover:border-[var(--flow)] hover:text-[var(--paper)] hover:no-underline"
     >
       <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-[var(--flow)]" aria-hidden />
-      {version ?? "v1.0.0"}
+      {version ?? "unreleased"}
     </ExtLink>
   );
 }

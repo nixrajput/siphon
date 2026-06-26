@@ -215,8 +215,8 @@ export default function Home() {
           </div>
           <p className="text-sm text-[var(--muted)]">
             Prefer source? <code className="mono text-[var(--flow)]">go install</code> the module,
-            or grab a signed binary from <ExtLink href={`${REPO_URL}/releases`}>Releases</ExtLink>.
-            Every archive ships with a SHA-256 checksum and a cosign signature.
+            or grab a prebuilt binary from <ExtLink href={`${REPO_URL}/releases`}>Releases</ExtLink>
+            . Every archive has a SHA-256 checksum, and the checksum file is cosign-signed.
           </p>
         </div>
       </section>

@@ -24,14 +24,20 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 
   if [ "$remote_sha" = "$z40" ]; then
     # New branch on the remote: diff against the upstream default so we only
-    # consider this branch's own commits, not all of history.
-    range=$(git rev-parse --quiet --verify origin/main >/dev/null 2>&1 \
-      && echo "origin/main..$local_sha" || echo "$local_sha")
+    # consider this branch's own commits. If origin/main is unknown locally we
+    # cannot compute a real range — fail closed and run the checks rather than
+    # diffing against the working tree (which could skip committed web/ changes).
+    if git rev-parse --quiet --verify origin/main >/dev/null 2>&1; then
+      range="origin/main..$local_sha"
+    else
+      changed_web=1
+      break
+    fi
   else
     range="$remote_sha..$local_sha"
   fi
 
-  # Any web/ files in this range? (true also when `range` is a single sha.)
+  # Any web/ files in this range?
   if git diff --name-only "$range" 2>/dev/null | grep -q '^web/'; then
     changed_web=1
     break

@@ -59,8 +59,16 @@ export async function ghFetch<T>(url: string): Promise<T | null> {
   if (existing) return existing as Promise<T | null>;
 
   const p = (async (): Promise<T | null> => {
+    // Abort after a short deadline so a hung request can't leave the hooks (and
+    // their skeletons) stuck loading forever — the abort routes through the
+    // catch below into the normal null/cache fallback.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(url, { headers: { Accept: "application/vnd.github+json" } });
+      const res = await fetch(url, {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: controller.signal,
+      });
       if (!res.ok) {
         writeCache(url, false, null);
         return null;
@@ -72,6 +80,7 @@ export async function ghFetch<T>(url: string): Promise<T | null> {
       writeCache(url, false, null);
       return null;
     } finally {
+      clearTimeout(timer);
       inflight.delete(url);
     }
   })();

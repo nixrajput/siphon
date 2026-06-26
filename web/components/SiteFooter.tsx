@@ -6,9 +6,11 @@ import { ExtLink } from "@/components/ExtLink";
 // and the developer — collapsing to a stack on mobile. The amber wordmark
 // rhymes with the install moment; everything else stays in the muted register
 // so the footer reads as a quiet sign-off, not a second navigation.
-const YEAR = 2026;
 
 export function SiteFooter() {
+  // Server component: the year is resolved at build/request time (re-baked on
+  // each redeploy), so the copyright never goes stale.
+  const year = new Date().getFullYear();
   return (
     <footer className="mt-24 border-t border-[var(--line)]">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-12 sm:grid-cols-2 lg:grid-cols-4">
@@ -90,7 +92,7 @@ export function SiteFooter() {
       <div className="border-t border-[var(--line)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-6 text-xs text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
           <span className="mono">
-            © {YEAR} {DEVELOPER.name} · MIT licensed
+            © {year} {DEVELOPER.name} · MIT licensed
           </span>
           <span className="mono">
             <span className="text-[var(--flow)]">~/</span>

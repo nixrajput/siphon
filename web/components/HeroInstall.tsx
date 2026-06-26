@@ -21,10 +21,10 @@ export function HeroInstall() {
           className="inline-flex items-center gap-2 no-underline hover:text-[var(--paper)]"
         >
           <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-[var(--flow)]" aria-hidden />
-          {/* Version defaults to the expected tag immediately — no skeleton, since
-              a sensible value beats a placeholder flash for the common case. */}
-          <span className="text-[var(--flow)]">{version ?? "v1.0.0"}</span>
-          <span>latest release</span>
+          {/* Show the real tag + "latest release" once one exists; until then show
+              neutral "unreleased" rather than claiming a version that isn't out. */}
+          <span className="text-[var(--flow)]">{version ?? "unreleased"}</span>
+          {version && <span>latest release</span>}
         </ExtLink>
         {/* Star count is genuinely unknown until the fetch lands: shimmer while
             loading, real count when ready, nothing on error or zero stars. */}

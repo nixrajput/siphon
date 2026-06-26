@@ -21,7 +21,7 @@ export default function DocsIndex() {
       <p className="mb-8 max-w-2xl leading-relaxed text-[var(--muted)]">
         Everything you need to run siphon in anger — from your first backup to continuous
         cross-engine replication. These pages render the same Markdown that ships in the repository,
-        so they always match the version you installed.
+        so they track the latest source.
       </p>
 
       {/* Quick start: get someone to a working install without leaving the
