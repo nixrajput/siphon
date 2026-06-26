@@ -10,6 +10,8 @@ const DOCS_DIR = path.join(process.cwd(), "..", "docs");
 
 // Ordered nav: file → slug + display title. Order is the sidebar order.
 const NAV: { file: string; slug: string; title: string }[] = [
+  { file: "GETTING_STARTED.md", slug: "getting-started", title: "Getting started" },
+  { file: "CONFIGURATION.md", slug: "configuration", title: "Configuration" },
   { file: "DRIVERS.md", slug: "drivers", title: "Drivers" },
   { file: "INCREMENTAL.md", slug: "incremental", title: "Incremental backup" },
   { file: "CROSS_ENGINE.md", slug: "cross-engine", title: "Cross-engine sync" },

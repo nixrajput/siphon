@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Terminal } from "@/components/Terminal";
 import { InstallCommand } from "@/components/InstallCommand";
+import { Reveal } from "@/components/Reveal";
 
 const REPO = "https://github.com/nixrajput/siphon";
 
@@ -49,21 +50,21 @@ export default function Home() {
           flows left→right, mirroring `siphon src dst`. */}
       <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-20 lg:grid-cols-2 lg:py-28">
         <div>
-          <p className="eyebrow mb-5">backup · restore · sync · cdc</p>
-          <h1 className="text-5xl sm:text-6xl">
+          <p className="eyebrow rise mb-5">backup · restore · sync · cdc</p>
+          <h1 className="rise text-5xl sm:text-6xl" style={{ "--rise-delay": "80ms" } as React.CSSProperties}>
             Sync any database,
             <br />
             <span className="bg-gradient-to-r from-[var(--flow)] to-[var(--flow-2)] bg-clip-text text-transparent">
               anywhere.
             </span>
           </h1>
-          <p className="mt-6 max-w-md text-lg leading-relaxed text-[#c4d0e0]">
+          <p className="rise mt-6 max-w-md text-lg leading-relaxed text-[#c4d0e0]" style={{ "--rise-delay": "160ms" } as React.CSSProperties}>
             One binary that turns the painful sprawl of{" "}
             <code className="mono text-sm text-[var(--flow)]">pg_dump → pg_restore</code>{" "}
             shell scripts into a guided, observable workflow — across PostgreSQL,
             MySQL, and MariaDB.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="rise mt-8 flex flex-wrap gap-3" style={{ "--rise-delay": "240ms" } as React.CSSProperties}>
             <Link
               href="/docs"
               className="rounded-lg bg-[var(--flow)] px-5 py-3 font-medium text-[var(--ink)] no-underline transition-opacity hover:opacity-90 hover:no-underline"
@@ -78,7 +79,9 @@ export default function Home() {
             </Link>
           </div>
         </div>
-        <Terminal />
+        <div className="rise" style={{ "--rise-delay": "320ms" } as React.CSSProperties}>
+          <Terminal />
+        </div>
       </section>
 
       {/* Feature stream: the signature flow line runs down the left margin,
@@ -88,12 +91,14 @@ export default function Home() {
         <div className="flex gap-8">
           <div className="flowline hidden shrink-0 sm:block" aria-hidden />
           <div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">
-            {FEATURES.map((f) => (
-              <article key={f.label} className="bg-[var(--ink)] p-6">
-                <p className="eyebrow mb-3">{f.label}</p>
-                <h3 className="mb-2 text-xl">{f.title}</h3>
-                <p className="text-sm leading-relaxed text-[var(--muted)]">{f.body}</p>
-              </article>
+            {FEATURES.map((f, i) => (
+              <Reveal key={f.label} delay={(i % 2) * 90} className="bg-[var(--ink)]">
+                <article className="p-6">
+                  <p className="eyebrow mb-3">{f.label}</p>
+                  <h3 className="mb-2 text-xl">{f.title}</h3>
+                  <p className="text-sm leading-relaxed text-[var(--muted)]">{f.body}</p>
+                </article>
+              </Reveal>
             ))}
           </div>
         </div>

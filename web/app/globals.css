@@ -90,12 +90,49 @@
   background-size: 2px 200px;
   animation: flow-down 6s linear infinite;
 }
+/* Orchestrated entrance: hero pieces settle in on load, staggered via
+   --rise-delay. Scroll-revealed elements (.reveal) rise once when they enter
+   the viewport, reinforcing the page's top-to-bottom "flow" metaphor. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--rise-delay, 0s);
+}
+/* Scroll reveal: hidden until JS adds .is-in (IntersectionObserver). */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--rise-delay, 0s);
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flowline {
     animation: none;
   }
   html {
     scroll-behavior: auto;
+  }
+  /* No motion: everything is simply present, never hidden. */
+  .rise,
+  .reveal {
+    animation: none;
+    transition: none;
+    opacity: 1;
+    transform: none;
   }
 }
 
