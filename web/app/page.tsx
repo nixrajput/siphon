@@ -85,7 +85,7 @@ export default function Home() {
             >
               Sync any database,
               <br />
-              <span className="bg-gradient-to-r from-(--flow) to-(--flow-2) bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-(--flow) to-(--flow-2) bg-clip-text text-transparent">
                 anywhere.
               </span>
             </h1>

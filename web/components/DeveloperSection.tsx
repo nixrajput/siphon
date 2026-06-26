@@ -31,7 +31,7 @@ export function DeveloperSection() {
             Made by{" "}
             <ExtLink
               href={DEVELOPER.portfolio}
-              className="bg-gradient-to-r from-(--flow) to-(--flow-2) bg-clip-text text-transparent hover:no-underline"
+              className="bg-linear-to-r from-(--flow) to-(--flow-2) bg-clip-text text-transparent hover:no-underline"
             >
               {DEVELOPER.name}
             </ExtLink>
