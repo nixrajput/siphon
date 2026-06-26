@@ -76,24 +76,23 @@ release:
     name: siphon
   prerelease: auto # tags like v1.0.0-rc1 → marked prerelease automatically
 
-# Homebrew tap. Publishes to a SEPARATE repo (nixrajput/homebrew-siphon) using
+# Homebrew cask. Publishes to a SEPARATE repo (nixrajput/homebrew-siphon) using
 # a PAT in HOMEBREW_TAP_GITHUB_TOKEN. skip_upload: auto means snapshots and
-# prereleases do NOT push the formula, so the core release succeeds even before
-# the tap repo / token exist — light up brew on a later stable release.
-brews:
+# prereleases do NOT push the cask, so the core release succeeds even before
+# the tap repo / token exist. GoReleaser v2 renamed `brews` → `homebrew_casks`;
+# a cask is the right model for a prebuilt binary (declare it via `binaries`
+# rather than an imperative formula install block).
+homebrew_casks:
   - name: siphon
+    binaries:
+      - siphon
     repository:
       owner: nixrajput
       name: homebrew-siphon
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/nixrajput/siphon"
     description: "Sync any database, anywhere — backup, restore, and sync across engines."
-    license: "MIT"
     skip_upload: auto
-    install: |
-      bin.install "siphon"
-    test: |
-      system "#{bin}/siphon", "--version"
 
 # Scoop bucket (Windows). Publishes to nixrajput/scoop-siphon via
 # SCOOP_TAP_GITHUB_TOKEN; same skip_upload: auto tolerance as brew.
