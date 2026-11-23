@@ -22,7 +22,14 @@ Thumbs.db
 # Local-only secrets and dumps
 *.local.sh
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.db
+*.sqlite
+*.sqlite3
 /dumps/
 
 # Logs
