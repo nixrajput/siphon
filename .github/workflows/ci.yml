@@ -67,7 +67,9 @@ jobs:
           # MaxScale has no repo for every new Ubuntu release (404 on 26.04), and CI needs only the client.
           sudo bash mariadb_repo_setup --skip-maxscale
           sudo apt-get update
-          sudo apt-get install -y mariadb-client
+          # The 26.04 image preinstalls mysql-server-core, which ships perror and
+          # my_print_defaults too. siphon's tests use neither, so let MariaDB's copies win.
+          sudo apt-get install -y -o Dpkg::Options::=--force-overwrite mariadb-client
       - name: Integration tests (Ubuntu only — needs Docker)
         if: matrix.os == 'ubuntu-latest'
         run: go test -tags=integration ./... github.com/nixrajput/siphon/internal/driver/_mysqlcommon
