@@ -64,7 +64,8 @@ jobs:
           # Pinned to the 2026-09-15 script. MariaDB lists its SHA-256 in its repository setup docs.
           curl -fsSLo mariadb_repo_setup https://r.mariadb.com/downloads/mariadb_repo_setup
           echo "b54c87edfe81b9837ef44a4a4f39383dd8df32776e6a18c0743a5d3ece044ac3  mariadb_repo_setup" | sha256sum -c -
-          sudo bash mariadb_repo_setup
+          # MaxScale has no repo for every new Ubuntu release (404 on 26.04), and CI needs only the client.
+          sudo bash mariadb_repo_setup --skip-maxscale
           sudo apt-get update
           sudo apt-get install -y mariadb-client
       - name: Integration tests (Ubuntu only — needs Docker)
