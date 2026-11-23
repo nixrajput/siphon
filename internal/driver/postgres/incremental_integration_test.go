@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"testing"
 	"time"
@@ -29,7 +28,7 @@ func TestBackupIncremental_BoundedCaptureAndReplay(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	db, err := sql.Open("pgx", buildDSN(prof))
+	db, err := openDB(prof)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

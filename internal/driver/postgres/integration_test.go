@@ -47,7 +47,7 @@ func startPostgres(t *testing.T) (driver.Profile, func(), func() (*sql.DB, error
 	}
 	cleanup := func() { _ = c.Terminate(ctx) }
 	opener := func() (*sql.DB, error) {
-		return sql.Open("pgx", buildDSN(prof))
+		return openDB(prof)
 	}
 	return prof, cleanup, opener
 }

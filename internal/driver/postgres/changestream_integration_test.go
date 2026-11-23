@@ -4,7 +4,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 	"testing"
 	"time"
@@ -59,7 +58,7 @@ func TestStreamChanges_Bounded(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	db, err := sql.Open("pgx", buildDSN(prof))
+	db, err := openDB(prof)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

@@ -56,7 +56,7 @@ func (c *Conn) streamWithStop(ctx context.Context, from canonical.Position, stop
 		return canonical.Position{}, err
 	}
 
-	repl, err := pgconn.Connect(ctx, c.replicationDSN())
+	repl, err := c.connectReplication(ctx)
 	if err != nil {
 		return canonical.Position{}, &errs.Error{
 			Op:    "postgres.stream",
@@ -425,7 +425,7 @@ func (c *Conn) establishLogicalSlot(ctx context.Context) (string, error) {
 	if err := c.ensurePublication(ctx); err != nil {
 		return "", err
 	}
-	repl, err := pgconn.Connect(ctx, c.replicationDSN())
+	repl, err := c.connectReplication(ctx)
 	if err != nil {
 		return "", &errs.Error{
 			Op:    "postgres.stream",
@@ -461,9 +461,14 @@ func resolveStartLSN(ctx context.Context, repl *pgconn.PgConn, from canonical.Po
 	return sys.XLogPos, nil
 }
 
-// replicationDSN builds a libpq keyword DSN like buildDSN but adds
-// replication=database, which pgconn requires to open a logical replication
-// connection (a plain connection rejects START_REPLICATION).
-func (c *Conn) replicationDSN() string {
-	return buildDSN(c.p) + " replication=database"
+// connectReplication opens a logical replication connection. pgconn needs the
+// replication=database startup parameter for it: a plain connection rejects
+// START_REPLICATION.
+func (c *Conn) connectReplication(ctx context.Context) (*pgconn.PgConn, error) {
+	cfg, err := parseConfig(c.p)
+	if err != nil {
+		return nil, err
+	}
+	cfg.RuntimeParams["replication"] = "database"
+	return pgconn.ConnectConfig(ctx, &cfg.Config)
 }
