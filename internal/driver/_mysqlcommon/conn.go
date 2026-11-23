@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,6 +132,9 @@ func (c *Conn) Verify(_ context.Context, r io.Reader) (*driver.VerifyReport, err
 // BackupWith spawns the given dump binary (mysqldump or mariadb-dump) and
 // streams its stdout to w. ctx cancellation propagates via exec.CommandContext.
 func BackupWith(ctx context.Context, binary string, p driver.Profile, opt driver.BackupOpts, w io.Writer) error {
+	if err := checkDBName(binary+".backup", p.Database); err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(ctx, binary, BuildDumpArgs(p, opt)...)
 	cmd.Env = withMySQLPwd(os.Environ(), p.Password)
 	cmd.Stdout = w
@@ -149,6 +153,9 @@ func BackupWith(ctx context.Context, binary string, p driver.Profile, opt driver
 // RestoreWith spawns the given client binary (mysql or mariadb) and pipes r
 // into its stdin. ctx cancellation propagates via exec.CommandContext.
 func RestoreWith(ctx context.Context, binary string, p driver.Profile, opt driver.RestoreOpts, r io.Reader) error {
+	if err := checkDBName(binary+".restore", p.Database); err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(ctx, binary, BuildRestoreArgs(p, opt)...)
 	cmd.Env = withMySQLPwd(os.Environ(), p.Password)
 	cmd.Stdin = r
@@ -156,6 +163,15 @@ func RestoreWith(ctx context.Context, binary string, p driver.Profile, opt drive
 
 	if err := cmd.Run(); err != nil {
 		return toolErr(binary, binary+".restore", err)
+	}
+	return nil
+}
+
+// checkDBName rejects a database name with a leading "-". The dump and client
+// tools take the name as a positional argument and would parse it as an option.
+func checkDBName(op, name string) error {
+	if strings.HasPrefix(name, "-") {
+		return &errs.Error{Op: op, Code: errs.CodeUser, Cause: errors.New("invalid database name " + strconv.Quote(name))}
 	}
 	return nil
 }

@@ -1,7 +1,10 @@
 package mysqlcommon
 
 import (
+	"context"
+	"io"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/nixrajput/siphon/internal/driver"
@@ -135,6 +138,20 @@ func TestTLSParam(t *testing.T) {
 	for mode, want := range cases {
 		if got := tlsParam(mode); got != want {
 			t.Errorf("tlsParam(%q) = %q; want %q", mode, got, want)
+		}
+	}
+}
+
+// TestDumpAndRestore_RejectOptionLikeDatabase checks that a database name with a
+// leading "-" never reaches the tool, where mysqldump or mysql would parse it as
+// an option such as --result-file. The check runs before the binary starts.
+func TestDumpAndRestore_RejectOptionLikeDatabase(t *testing.T) {
+	p := driver.Profile{Host: "h", Port: 3306, User: "u", Database: "--result-file=/tmp/x"}
+	backupErr := BackupWith(context.Background(), "mysqldump", p, driver.BackupOpts{}, io.Discard)
+	restoreErr := RestoreWith(context.Background(), "mysql", p, driver.RestoreOpts{}, strings.NewReader(""))
+	for name, err := range map[string]error{"backup": backupErr, "restore": restoreErr} {
+		if err == nil || !strings.Contains(err.Error(), "invalid database name") {
+			t.Fatalf("%s: want an invalid database name error, got %v", name, err)
 		}
 	}
 }
