@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"io"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestDashboard_Initial_Snapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	teatest.RequireEqualOutput(t, out)
+	teatest.RequireEqualOutput(t, lf(out))
 }
 
 // TestDashboard_FocusDumps_Snapshot captures the dashboard after one Tab press.
@@ -69,5 +70,9 @@ func TestDashboard_FocusDumps_Snapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	teatest.RequireEqualOutput(t, out)
+	teatest.RequireEqualOutput(t, lf(out))
 }
+
+// lf turns the renderer's CRLF line endings into LF. x/exp/golden v0.1.0 stopped
+// doing this itself, and the committed golden files use LF.
+func lf(b []byte) []byte { return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n")) }
