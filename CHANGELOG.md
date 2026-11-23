@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1]
+
 ### Security
 
 - Postgres connect errors no longer show part of a password that contains a quote. siphon now sets the password on the parsed config, not in the DSN.
@@ -15,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgrade the web site to Next.js 16.4.6 and pin every web dependency exactly. `npm audit` reports 0 issues.
 - Pin every GitHub Action by commit SHA, pin golangci-lint, GoReleaser and cosign, and verify the MariaDB repo script by SHA-256.
 - `SECURITY.md` sends reports to GitHub private advisories and lists 1.0.x as supported.
+- `siphon tunnel` passes the bastion after `--`, and MySQL/MariaDB backup and restore reject a database name that starts with `-`.
+
+### Changed
+
+- siphon reads and writes its config with `go.yaml.in/yaml/v3`, the maintained fork of the archived `gopkg.in/yaml.v3`.
+
+## [1.0.0] - 2026-06-26
 
 ### Added
 
