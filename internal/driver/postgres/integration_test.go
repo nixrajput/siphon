@@ -17,7 +17,9 @@ import (
 func startPostgres(t *testing.T) (driver.Profile, func(), func() (*sql.DB, error)) {
 	t.Helper()
 	ctx := context.Background()
-	c, err := pgctr.Run(ctx, "postgres:16-alpine",
+	// Keep the server major equal to CI's pg_dump/pg_restore (18 on Ubuntu 26.04).
+	// pg_restore 18 sets transaction_timeout, which a 16 server rejects.
+	c, err := pgctr.Run(ctx, "postgres:18-alpine",
 		pgctr.WithDatabase("test"),
 		pgctr.WithUsername("postgres"),
 		pgctr.WithPassword("postgres"),
