@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2]
+
+### Security
+
+- `siphon profile add` reads the password from `--password-stdin` or a no-echo prompt, and warns when `--password` holds a literal password.
+
 ## [1.0.1]
 
 ### Security
