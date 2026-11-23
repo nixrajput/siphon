@@ -43,6 +43,15 @@ func (c *Conn) StreamChanges(ctx context.Context, from canonical.Position, emit 
 // position reaches or passes stopAt — every change up to that point has been
 // emitted, and none past it.
 func (c *Conn) streamChangesWithStop(ctx context.Context, from canonical.Position, stopAt *BinlogPosition, emit func(canonical.CanonicalChange) error) (canonical.Position, error) {
+	// The binlog file is the tool's last positional argument and can come from a
+	// stored dump envelope. A leading '-' would make the tool read it as an option.
+	if strings.HasPrefix(from.BinlogFile, "-") {
+		return canonical.Position{}, &errs.Error{
+			Op:    c.binlogBinary + ".stream",
+			Code:  errs.CodeUser,
+			Cause: errors.New("invalid binlog file name " + strconv.Quote(from.BinlogFile)),
+		}
+	}
 	if err := c.ValidateBinlogFormat(ctx); err != nil {
 		return canonical.Position{}, err
 	}

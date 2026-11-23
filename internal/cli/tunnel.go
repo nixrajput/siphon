@@ -76,14 +76,15 @@ func validPort(p int) bool { return p > 0 && p <= 65535 }
 
 // tunnelArgs builds the `ssh` argument list for a local forward. Pure and
 // testable: -N (no remote command), -L localPort:dbHost:dbPort, then the
-// bastion. ExitOnForwardFailure makes ssh fail fast if the local bind fails
-// rather than silently opening a useless session.
+// bastion after "--", so a bastion value like -oProxyCommand=... cannot become
+// an ssh option. ExitOnForwardFailure makes ssh fail fast if the local bind
+// fails rather than silently opening a useless session.
 func tunnelArgs(localPort int, dbHost string, dbPort int, bastion string) []string {
 	forward := strconv.Itoa(localPort) + ":" + dbHost + ":" + strconv.Itoa(dbPort)
 	return []string{
 		"-N",
 		"-o", "ExitOnForwardFailure=yes",
 		"-L", forward,
-		bastion,
+		"--", bastion,
 	}
 }

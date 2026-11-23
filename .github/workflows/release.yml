@@ -24,24 +24,24 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false # don't leave the token in .git/config
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod # reproducible: pin the toolchain to go.mod
           cache: true
       - name: Test
         run: go test ./... github.com/nixrajput/siphon/internal/driver/_mysqlcommon
       - name: Lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2 # match ci.yml; v2 is built with current Go (go.mod targets 1.26)
+          version: v2.15.0 # match ci.yml; v2 is built with current Go (go.mod targets 1.26)
       - name: GoReleaser check
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: "~> v2"
+          version: v2.20.3
           args: check
 
   release:
@@ -52,34 +52,40 @@ jobs:
       contents: write # create the GitHub Release
       id-token: write # cosign keyless signing via GitHub OIDC
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false # don't leave the token in .git/config # GoReleaser needs full history + tags for the changelog
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod # reproducible: pin the toolchain to go.mod
           cache: true
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          # cosign v3 needs --bundle for sign-blob and stops writing the .sig/.pem
+          # pair that install.sh and the README verify. Stay on v2 until both move.
+          cosign-release: v2.6.5
 
       # On a tag push: full release. On manual dispatch: snapshot dry-run that
       # builds everything locally and publishes nothing (rehearsal).
       - name: Set release args
         id: args
+        env:
+          REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
+          if [ "$REF_TYPE" = "tag" ]; then
             echo "args=release --clean" >> "$GITHUB_OUTPUT"
           else
             echo "args=release --clean --snapshot" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: "~> v2"
+          version: v2.20.3
           args: ${{ steps.args.outputs.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

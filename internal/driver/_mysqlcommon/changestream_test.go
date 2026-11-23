@@ -1,6 +1,7 @@
 package mysqlcommon
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -196,5 +197,17 @@ func TestParseBinlogRows_FlushesAtMarker(t *testing.T) {
 	// "# at 100" marker flushed it rather than the second INSERT's op-line.
 	if got[0].Values["name"] != "a" || got[1].Values["name"] != "b" {
 		t.Errorf("changes out of order or wrong: %+v", got)
+	}
+}
+
+// TestStreamChanges_RejectsOptionLikeBinlogFile checks that a binlog file name
+// from a stored envelope cannot become a flag of the binlog tool, such as
+// mysqlbinlog --result-file. The check runs before any database call.
+func TestStreamChanges_RejectsOptionLikeBinlogFile(t *testing.T) {
+	c := &Conn{binlogBinary: "mysqlbinlog"}
+	from := canonical.Position{BinlogFile: "--result-file=/tmp/x", BinlogPos: 4}
+	_, err := c.StreamChanges(context.Background(), from, func(canonical.CanonicalChange) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "invalid binlog file name") {
+		t.Fatalf("want an invalid binlog file name error, got %v", err)
 	}
 }

@@ -22,7 +22,9 @@ import (
 func TestS3Store_Contract(t *testing.T) {
 	ctx := context.Background()
 
-	mc, err := tcminio.Run(ctx, "minio/minio:RELEASE.2024-01-16T16-07-38Z")
+	// minio/minio is gone from Docker Hub. Chainguard's MinIO build has only a moving
+	// latest tag, so pin its index digest (taken 2026-11-23).
+	mc, err := tcminio.Run(ctx, "cgr.dev/chainguard/minio@sha256:bd92a45b821c0d85772c607ed7b49693efe78b3ffffae301b5d1b0981660de22")
 	if err != nil {
 		t.Fatalf("start minio: %v", err)
 	}

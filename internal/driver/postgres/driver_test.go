@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -46,8 +47,8 @@ func TestBuildDSN_FullProfile(t *testing.T) {
 		SSLMode:  "disable",
 	})
 
-	if !strings.Contains(dsn, "password=secret") {
-		t.Fatalf("DSN must contain password=secret, got %q", dsn)
+	if strings.Contains(dsn, "secret") {
+		t.Fatalf("DSN must not contain the password, got %q", dsn)
 	}
 	if !strings.Contains(dsn, "dbname=d") {
 		t.Fatalf("DSN must contain dbname=d, got %q", dsn)
@@ -66,22 +67,60 @@ func TestBuildDSN_FullProfile(t *testing.T) {
 }
 
 // TestBuildDSN_QuotesSpecialValues is the regression for libpq keyword escaping:
-// a password containing spaces/quotes/backslashes must be single-quoted (with '
+// a value containing spaces/quotes/backslashes must be single-quoted (with '
 // and \ escaped) so pgx parses it back to the exact original, not split tokens.
 func TestBuildDSN_QuotesSpecialValues(t *testing.T) {
-	for _, pw := range []string{"p@ss word", `quote'd`, `back\slash`, "a b c"} {
+	for _, v := range []string{"p@ss word", `quote'd`, `back\slash`, "a b c"} {
 		dsn := buildDSN(driver.Profile{
-			Host: "localhost", Port: 5432, User: "u", Password: pw, Database: "d", SSLMode: "disable",
+			Host: "localhost", Port: 5432, User: v, Database: v, SSLMode: "disable",
 		})
 		cfg, err := pgx.ParseConfig(dsn)
 		if err != nil {
-			t.Fatalf("password %q: ParseConfig(%q): %v", pw, dsn, err)
+			t.Fatalf("value %q: ParseConfig(%q): %v", v, dsn, err)
+		}
+		if cfg.User != v || cfg.Database != v {
+			t.Fatalf("value %q round-tripped as user %q, dbname %q via DSN %q", v, cfg.User, cfg.Database, dsn)
+		}
+	}
+}
+
+// TestParseConfig_SetsPassword checks that a password with DSN-special
+// characters reaches the parsed config unchanged.
+func TestParseConfig_SetsPassword(t *testing.T) {
+	for _, pw := range []string{"p@ss word", `quote'd`, `back\slash`, "a b c", "password=x"} {
+		cfg, err := parseConfig(driver.Profile{
+			Host: "localhost", Port: 5432, User: "u", Password: pw, Database: "d", SSLMode: "disable",
+		})
+		if err != nil {
+			t.Fatalf("password %q: %v", pw, err)
 		}
 		if cfg.Password != pw {
-			t.Fatalf("password %q round-tripped as %q via DSN %q", pw, cfg.Password, dsn)
+			t.Fatalf("password %q arrived as %q", pw, cfg.Password)
 		}
 		if cfg.Database != "d" {
 			t.Fatalf("password %q broke dbname: got %q", pw, cfg.Database)
+		}
+	}
+}
+
+// TestConnectErrors_HidePassword is the regression for a password leak: pgx put
+// the DSN in its parse error, and its redaction left the part of a quoted
+// password after the quote. The audit log stores that error text.
+func TestConnectErrors_HidePassword(t *testing.T) {
+	p := driver.Profile{
+		Host: "localhost", Port: 5432, User: "u", Database: "d",
+		Password: "pa'ss word-TAIL", SSLMode: "bogus", // an invalid sslmode fails the parse
+	}
+	_, connErr := Driver{}.Connect(context.Background(), p)
+	_, replErr := (&Conn{p: p}).connectReplication(context.Background())
+	for name, err := range map[string]error{"connect": connErr, "replication": replErr} {
+		if err == nil {
+			t.Fatalf("%s: want a parse error for sslmode=bogus", name)
+		}
+		for _, frag := range []string{"pa'ss", "word", "TAIL"} {
+			if strings.Contains(err.Error(), frag) {
+				t.Fatalf("%s error leaks password fragment %q: %v", name, frag, err)
+			}
 		}
 	}
 }
