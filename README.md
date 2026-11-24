@@ -204,6 +204,8 @@ profiles:
 
 Secret references are resolved at runtime, which keeps the password out of the config file when you use one. Supported schemes: `env:VAR` (environment variable), `keychain://<account>` or `keychain://<service>/<account>` (OS keychain — macOS Keychain / Windows Credential Manager / Linux Secret Service), and `awssm://<secret-id>` or `awssm://<secret-id>#<json-key>` (AWS Secrets Manager; enable with `secrets.awssm: true`). A value matching no scheme is treated as a literal — so a plaintext password lives in the file and should not be committed. See [docs/OPS.md](docs/OPS.md#secret-backends).
 
+Do not give a literal password to `siphon profile add --password`. The value is visible to other users in the process list and stays in your shell history, so siphon prints a warning. Pipe it in with `--password-stdin` (`printf '%s' "$DB_PASS" | siphon profile add prod --password-stdin ...`), or leave out both password flags and siphon prompts for it without echo when stdin is a terminal.
+
 By default the dump catalog lives on local disk at `defaults.dump_dir`. To store dumps in an S3 / S3-compatible bucket instead, add a `storage:` block:
 
 ```yaml

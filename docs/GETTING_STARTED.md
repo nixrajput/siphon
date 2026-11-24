@@ -49,6 +49,8 @@ siphon profile add prod \
 siphon profile list
 ```
 
+To store a literal password instead, do not pass it with `--password`: the value is visible to other users in the process list and stays in your shell history, so siphon prints a warning. Pipe it in with `--password-stdin`, or leave out both password flags and siphon prompts for it without echo when stdin is a terminal.
+
 Inspect the schema to confirm the connection works:
 
 ```bash

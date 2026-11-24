@@ -3,9 +3,7 @@
 // command transcript itself, so that IS the hero. Lines are colored by role
 // (prompt, command, flow output) using the palette's flow accent.
 type Line =
-  | { kind: "cmd"; text: string }
-  | { kind: "out"; text: string }
-  | { kind: "flow"; text: string };
+  { kind: "cmd"; text: string } | { kind: "out"; text: string } | { kind: "flow"; text: string };
 
 const SESSION: Line[] = [
   { kind: "cmd", text: "siphon backup prod" },

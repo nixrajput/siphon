@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+
 	"github.com/nixrajput/siphon/internal/driver"
 	"github.com/nixrajput/siphon/internal/errs"
 	"github.com/nixrajput/siphon/internal/jobs"
-
-	_ "github.com/jackc/pgx/v5/stdlib" // register pgx as a database/sql driver
 )
 
 func init() { driver.Register(&Driver{}) }
@@ -40,9 +41,7 @@ func (Driver) Capabilities() driver.Capabilities {
 }
 
 func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error) {
-	dsn := buildDSN(p)
-
-	db, err := sql.Open("pgx", dsn)
+	db, err := openDB(p)
 	if err != nil {
 		return nil, wrapConnErr(err)
 	}
@@ -56,10 +55,33 @@ func (Driver) Connect(ctx context.Context, p driver.Profile) (driver.Conn, error
 	return &Conn{db: db, p: p}, nil
 }
 
+// openDB returns a database/sql handle for p. It does not connect.
+func openDB(p driver.Profile) (*sql.DB, error) {
+	cfg, err := parseConfig(p)
+	if err != nil {
+		return nil, err
+	}
+	return stdlib.OpenDB(*cfg), nil
+}
+
+// parseConfig parses p's DSN and then sets the password on the parsed config.
+// pgx echoes a DSN that fails to parse, and its redaction misses a password
+// that contains a quote, so the password never goes into the DSN.
+func parseConfig(p driver.Profile) (*pgx.ConnConfig, error) {
+	cfg, err := pgx.ParseConfig(buildDSN(p))
+	if err != nil {
+		return nil, err
+	}
+	if p.Password != "" {
+		cfg.Password = p.Password
+	}
+	return cfg, nil
+}
+
 // buildDSN assembles a libpq keyword DSN from only the non-empty profile
-// fields. Emitting an empty value (e.g. password=) makes pgx's keyword parser
-// swallow the following token, which previously dropped dbname when the
-// password was empty. Port is always emitted since it is an int default.
+// fields, without the password (see parseConfig). Emitting an empty value
+// (e.g. dbname=) makes pgx's keyword parser swallow the following token. Port
+// is always emitted since it is an int default.
 func buildDSN(p driver.Profile) string {
 	parts := make([]string, 0, 6)
 	if p.Host != "" {
@@ -70,9 +92,6 @@ func buildDSN(p driver.Profile) string {
 	}
 	if p.User != "" {
 		parts = append(parts, kv("user", p.User))
-	}
-	if p.Password != "" {
-		parts = append(parts, kv("password", p.Password))
 	}
 	if p.Database != "" {
 		parts = append(parts, kv("dbname", p.Database))
