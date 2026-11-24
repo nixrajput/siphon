@@ -61,7 +61,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Requirements
 
-- **[Go](https://go.dev/dl/) 1.27 or newer** — only needed to build from source; prebuilt binaries are available via the install script, Homebrew, and Scoop (see [Install](#install)).
+- **[Go](https://go.dev/dl/) 1.27.4 or newer** - only needed to build from source; prebuilt binaries are available via the install script, Homebrew, and Scoop (see [Install](#install)).
 - **Database client tools** — siphon shells out to the native dump/restore tools; it does not embed a client. You only need the tools for the engines you actually use:
   - **PostgreSQL** profiles need `pg_dump`, `pg_restore`, `psql`.
   - **MySQL** profiles need `mysqldump`, `mysql`.
