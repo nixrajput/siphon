@@ -44,7 +44,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          changed=$(git diff --no-renames --name-only "origin/$BASE_REF...HEAD")
           echo "changed files:"; printf '%s\n' "$changed" | sed 's/^/  /'
           # Counted, not `grep -qv`: the inverted-match exit code varies between
           # grep implementations, and a wrong answer here either blocks every PR
