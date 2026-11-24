@@ -8,7 +8,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 [![CI](https://github.com/nixrajput/siphon/actions/workflows/ci.yml/badge.svg)](https://github.com/nixrajput/siphon/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nixrajput/siphon.svg)](https://pkg.go.dev/github.com/nixrajput/siphon)
-[![Go Version](https://img.shields.io/badge/go-1.27%2B-00ADD8?logo=go)](https://go.dev/dl/)
+[![Go Version](https://img.shields.io/badge/go-1.27.4%2B-00ADD8?logo=go)](https://go.dev/dl/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-1.0-brightgreen)](#features)
 
