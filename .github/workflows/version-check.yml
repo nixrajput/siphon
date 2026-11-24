@@ -1,7 +1,8 @@
 name: Version Check
 
-# Every PR must bump the root VERSION file (plain "x.y.z"). Release tags it on
-# merge. Used by repos with no package manifest (Go, C++, Shell).
+# Every PR must bump the root VERSION file (plain "x.y.z"). A PR that changes
+# only the waived paths in the scope step below needs no bump. A release comes
+# from a manual v* tag push, not from a merge.
 on:
   pull_request:
     branches: ["main"]
