@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4]
+
+### Changed
+
+- Build with Go 1.27.4. Building siphon from source now needs Go 1.27 or newer.
+
 ## [1.0.2]
 
 ### Security
