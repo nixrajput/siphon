@@ -8,7 +8,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 [![CI](https://github.com/nixrajput/siphon/actions/workflows/ci.yml/badge.svg)](https://github.com/nixrajput/siphon/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nixrajput/siphon.svg)](https://pkg.go.dev/github.com/nixrajput/siphon)
-[![Go Version](https://img.shields.io/badge/go-1.26%2B-00ADD8?logo=go)](https://go.dev/dl/)
+[![Go Version](https://img.shields.io/badge/go-1.27.4%2B-00ADD8?logo=go)](https://go.dev/dl/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-1.0-brightgreen)](#features)
 
@@ -61,7 +61,7 @@ A single binary that turns the painful, error-prone sprawl of `pg_dump` → `pg_
 
 ## Requirements
 
-- **[Go](https://go.dev/dl/) 1.26 or newer** — only needed to build from source; prebuilt binaries are available via the install script, Homebrew, and Scoop (see [Install](#install)).
+- **[Go](https://go.dev/dl/) 1.27.4 or newer** - only needed to build from source; prebuilt binaries are available via the install script, Homebrew, and Scoop (see [Install](#install)).
 - **Database client tools** — siphon shells out to the native dump/restore tools; it does not embed a client. You only need the tools for the engines you actually use:
   - **PostgreSQL** profiles need `pg_dump`, `pg_restore`, `psql`.
   - **MySQL** profiles need `mysqldump`, `mysql`.

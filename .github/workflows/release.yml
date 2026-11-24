@@ -37,7 +37,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.15.0 # match ci.yml; v2 is built with current Go (go.mod targets 1.26)
+          version: v2.15.0 # match ci.yml; v2 is built with current Go (go.mod targets 1.27)
       - name: GoReleaser check
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
